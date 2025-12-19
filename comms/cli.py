@@ -56,6 +56,18 @@ def backup():
 
 
 @app.command()
+def rules():
+    """Show triage rules (edit at ~/.comms/rules.md)"""
+    from .config import RULES_PATH
+
+    if not RULES_PATH.exists():
+        typer.echo(f"No rules file. Create one at: {RULES_PATH}")
+        return
+
+    typer.echo(RULES_PATH.read_text())
+
+
+@app.command()
 def status():
     """Show system status"""
     from .config import get_policy

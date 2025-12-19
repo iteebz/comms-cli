@@ -5,6 +5,7 @@ import yaml
 COMMS_DIR = Path.home() / ".comms"
 DB_PATH = COMMS_DIR / "store.db"
 CONFIG_PATH = COMMS_DIR / "config.yaml"
+RULES_PATH = COMMS_DIR / "rules.md"
 BACKUP_DIR = Path.home() / ".comms_backups"
 
 
