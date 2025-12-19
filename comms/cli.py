@@ -400,14 +400,18 @@ def unlink(account_id: str):
 
 
 @app.command()
-def threads():
-    """List inbox threads from all accounts"""
+def threads(
+    label: str = typer.Option(
+        "inbox", "--label", "-l", help="Label filter: inbox, unread, archive, trash, starred, sent"
+    ),
+):
+    """List threads from all accounts"""
     accounts = accts_module.list_accounts("email")
 
     for account in accounts:
         if account["provider"] == "gmail":
-            typer.echo(f"\n{account['email']}:")
-            threads = gmail.list_inbox_threads(account["email"])
+            typer.echo(f"\n{account['email']} ({label}):")
+            threads = gmail.list_threads(account["email"], label=label)
 
             if not threads:
                 typer.echo("  No threads")

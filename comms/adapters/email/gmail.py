@@ -116,13 +116,23 @@ def count_inbox_threads(email_addr: str) -> int:
     return label.get("threadsTotal", 0)
 
 
-def list_inbox_threads(email_addr: str, max_results: int = 50) -> list[dict]:
+def list_threads(email_addr: str, label: str = "inbox", max_results: int = 50) -> list[dict]:
     creds, _ = _get_credentials(email_addr)
     service = build("gmail", "v1", credentials=creds)
 
-    results = (
-        service.users().threads().list(userId="me", q="in:inbox", maxResults=max_results).execute()
-    )
+    # Map label to Gmail query
+    label_queries = {
+        "inbox": "in:inbox",
+        "unread": "is:unread",
+        "archive": "-in:inbox -in:trash -in:spam",
+        "trash": "in:trash",
+        "starred": "is:starred",
+        "sent": "in:sent",
+    }
+
+    query = label_queries.get(label, f"in:{label}")
+
+    results = service.users().threads().list(userId="me", q=query, maxResults=max_results).execute()
 
     threads = []
     for thread_ref in results.get("threads", []):
@@ -134,6 +144,10 @@ def list_inbox_threads(email_addr: str, max_results: int = 50) -> list[dict]:
         )
 
     return threads
+
+
+def list_inbox_threads(email_addr: str, max_results: int = 50) -> list[dict]:
+    return list_threads(email_addr, label="inbox", max_results=max_results)
 
 
 def fetch_messages(account_id: str, email_addr: str, since_days: int = 7) -> list[Message]:
