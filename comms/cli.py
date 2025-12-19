@@ -440,7 +440,8 @@ def threads(
                 continue
 
             for t in threads:
-                typer.echo(f"  {t['id'][:8]} | {t['snippet'][:60]}")
+                date_str = t.get("date", "")[:16]  # "Mon, 7 Jul 2025"
+                typer.echo(f"  {t['id'][:8]} | {date_str:16} | {t['snippet'][:50]}")
 
 
 @app.command()

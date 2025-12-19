@@ -120,7 +120,6 @@ def list_threads(email_addr: str, label: str = "inbox", max_results: int = 50) -
     creds, _ = _get_credentials(email_addr)
     service = build("gmail", "v1", credentials=creds)
 
-    # Map label to Gmail query
     label_queries = {
         "inbox": "in:inbox",
         "unread": "is:unread",
@@ -136,10 +135,32 @@ def list_threads(email_addr: str, label: str = "inbox", max_results: int = 50) -
 
     threads = []
     for thread_ref in results.get("threads", []):
+        thread = (
+            service.users()
+            .threads()
+            .get(
+                userId="me",
+                id=thread_ref["id"],
+                format="metadata",
+                metadataHeaders=["From", "Subject", "Date"],
+            )
+            .execute()
+        )
+
+        messages = thread.get("messages", [])
+        if not messages:
+            continue
+
+        last_msg = messages[-1]
+        headers = {h["name"].lower(): h["value"] for h in last_msg["payload"].get("headers", [])}
+
         threads.append(
             {
                 "id": thread_ref["id"],
                 "snippet": thread_ref.get("snippet", "(no subject)"),
+                "from": headers.get("from", ""),
+                "subject": headers.get("subject", ""),
+                "date": headers.get("date", ""),
             }
         )
 
