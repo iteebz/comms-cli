@@ -571,27 +571,35 @@ def _thread_action(thread_id: str, action_name: str, action_fn, email: str = Non
 
 
 @app.command()
-def review(status: str = typer.Option(None, "--status", "-s")):
+def review(
+    status: str = typer.Option(None, "--status", "-s"),
+    action: str = typer.Option(
+        None, "--action", "-a", help="Filter by action: delete, archive, flag"
+    ),
+):
     """Review proposals"""
     props = proposals.list_proposals(status=status)
+
+    if action:
+        props = [p for p in props if p["proposed_action"] == action]
 
     if not props:
         typer.echo("No proposals")
         return
 
+    by_action = {}
     for p in props:
-        status_icon = {"pending": "⧗", "approved": "✓", "rejected": "✗", "executed": "✓✓"}.get(
-            p["status"], "?"
-        )
-        typer.echo(
-            f"{status_icon} {p['id'][:8]} | {p['proposed_action']:10} {p['entity_type']:8} {p['entity_id'][:8]}"
-        )
-        if p["agent_reasoning"]:
-            typer.echo(f"   agent: {p['agent_reasoning']}")
-        if p["correction"]:
-            typer.echo(f"   correction: {p['correction']}")
-        if p["user_reasoning"]:
-            typer.echo(f"   user:  {p['user_reasoning']}")
+        a = p["proposed_action"]
+        if a not in by_action:
+            by_action[a] = []
+        by_action[a].append(p)
+
+    for act in ["flag", "archive", "delete"]:
+        if act not in by_action:
+            continue
+        typer.echo(f"\n=== {act.upper()} ({len(by_action[act])}) ===")
+        for p in by_action[act]:
+            typer.echo(f"  {p['id'][:8]} | {p['agent_reasoning'] or p['entity_id'][:8]}")
 
 
 @app.command()
@@ -664,13 +672,15 @@ def resolve():
         action = p["proposed_action"]
         entity_type = p["entity_type"]
         entity_id = p["entity_id"]
+        email = p.get("email")
 
         typer.echo(f"Executing: {action} {entity_type} {entity_id[:8]}")
 
         try:
             if entity_type == "thread":
-                account = accts_module.list_accounts("email")[0]
-                email = account["email"]
+                if not email:
+                    account = accts_module.list_accounts("email")[0]
+                    email = account["email"]
 
                 if action == "archive":
                     success = gmail.archive_thread(entity_id, email)

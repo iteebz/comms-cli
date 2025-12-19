@@ -46,6 +46,12 @@ CLI tool for AI-mediated email/messaging management. Target user has ADHD commun
 - **Thread views (WORKING):**
   - `comms threads --label inbox` (default)
   - `comms threads --label unread` / `--label archive` / `--label trash` / `--label starred` / `--label sent`
+  - Thread listing includes date metadata for triage decisions
+  - Thread ID prefix matching (8 chars → full Gmail ID)
+- **Triage rules:** `~/.comms/rules.md` - human-editable rules Claude reads before proposing
+- **Automatic backup:** `comms init` backs up DB before migrations, `comms backup` for manual
+- **Multi-account proposals:** Proposals track email for correct account routing on resolve
+- **Review UX:** `comms review` groups by action (flag/archive/delete)
 - **Interactive Claude triage (PRODUCTION READY):**
   - Claude reads 20 unread threads via Python API
   - Analyzes all thread content (from, subject, body preview)

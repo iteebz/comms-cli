@@ -77,7 +77,9 @@ comms audit-log
 - ✅ Stateless inbox (queries Gmail API directly)
 - ✅ Account linking + credential management (system keyring)
 - ✅ Thread actions (archive, delete, flag, etc.)
-- ✅ Thread views (--label inbox/unread/archive/trash/starred/sent)
+- ✅ Thread views (--label inbox/unread/archive/trash/starred/sent) with date metadata
+- ✅ Triage rules (`~/.comms/rules.md` - Claude reads before proposing)
+- ✅ Automatic backup on init + `comms backup` manual
 - ✅ **Interactive Claude triage (PRODUCTION)**
   - Claude reads/analyzes inbox threads
   - Proposes actions with reasoning

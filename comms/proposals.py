@@ -66,6 +66,7 @@ def create_proposal(
     entity_id: str,
     proposed_action: str,
     agent_reasoning: str | None = None,
+    email: str | None = None,
     skip_validation: bool = False,
 ) -> tuple[str | None, str]:
     if not skip_validation:
@@ -82,8 +83,8 @@ def create_proposal(
     with get_db() as conn:
         conn.execute(
             """
-            INSERT INTO proposals (id, entity_type, entity_id, proposed_action, agent_reasoning, proposed_at, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO proposals (id, entity_type, entity_id, proposed_action, agent_reasoning, email, proposed_at, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 proposal_id,
@@ -91,6 +92,7 @@ def create_proposal(
                 entity_id,
                 proposed_action,
                 agent_reasoning,
+                email,
                 datetime.now(),
                 "pending",
             ),
