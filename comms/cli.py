@@ -1,7 +1,7 @@
 import typer
 
 from . import accounts, audit, db, drafts, policy, sync
-from .adapters.email import proton
+from .adapters.email import gmail, proton
 
 app = typer.Typer(
     name="comms",
@@ -127,7 +127,10 @@ def account_add(
     provider: str = typer.Argument(..., help="Provider: proton, gmail, outlook"),
     email: str = typer.Argument(..., help="Email address"),
     password: str = typer.Option(
-        None, "--password", "-p", help="Password (will prompt if not provided)"
+        None, "--password", "-p", help="Password (Proton Bridge password)"
+    ),
+    credentials: str = typer.Option(
+        None, "--credentials", "-c", help="Path to credentials.json (Gmail OAuth)"
     ),
 ):
     """Add email account"""
@@ -135,14 +138,25 @@ def account_add(
         typer.echo(f"Unknown provider: {provider}")
         raise typer.Exit(1)
 
-    if not password:
-        password = typer.prompt("Password", hide_input=True)
-
     account_id = accounts.add_email_account(provider, email)
 
     if provider == "proton":
+        if not password:
+            password = typer.prompt("Proton Bridge Password", hide_input=True)
         proton.store_credentials(email, password)
         success, msg = proton.test_connection(account_id, email)
+        if not success:
+            typer.echo(f"Failed to connect: {msg}")
+            raise typer.Exit(1)
+
+    elif provider == "gmail":
+        if not credentials:
+            typer.echo("Gmail requires --credentials path to credentials.json")
+            typer.echo("Get it from: https://console.cloud.google.com/apis/credentials")
+            raise typer.Exit(1)
+
+        gmail.store_credentials(email, credentials)
+        success, msg = gmail.test_connection(account_id, email, credentials)
         if not success:
             typer.echo(f"Failed to connect: {msg}")
             raise typer.Exit(1)

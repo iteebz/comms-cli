@@ -1,5 +1,5 @@
 from . import accounts, audit
-from .adapters.email import proton
+from .adapters.email import gmail, proton
 from .db import get_db
 
 
@@ -13,6 +13,8 @@ def sync_account(account_id: str, since_days: int = 7) -> int:
 
     if provider == "proton":
         messages = proton.fetch_messages(account_id, email, since_days)
+    elif provider == "gmail":
+        messages = gmail.fetch_messages(account_id, email, since_days)
     else:
         return 0
 
