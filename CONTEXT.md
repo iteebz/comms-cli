@@ -6,7 +6,7 @@ CLI tool for AI-mediated email/messaging management. Target user has ADHD commun
 
 ## Architecture decisions
 
-**Inbox index, not email client:** SQLite stores thread metadata only (subject, participants, needs_reply flag). No message bodies. Providers remain source of truth. Fetch threads on-demand when needed.
+**Stateless inbox:** No threads table. SQLite stores only accounts, drafts, audit_log. Provider API is source of truth. Dashboard queries Gmail directly for counts. Thread listing fetches on-demand.
 
 **Pure functions over classes:** All adapters are pure functions. No OOP ceremony. Account ID passed explicitly, credentials fetched from keyring inside functions.
 
@@ -17,11 +17,12 @@ CLI tool for AI-mediated email/messaging management. Target user has ADHD commun
 ## Current state (2025-12-19)
 
 **Done:**
-- Database schema (accounts, threads, drafts, send_queue, audit_log, rules)
+- Database schema (accounts, drafts, send_queue, audit_log, rules)
+- Stateless inbox (removed threads table, query Gmail API directly)
 - Gmail adapter tested with 3 real accounts (OAuth2 + Gmail API)
-- Inbox sync: fetches thread index from Gmail (subject snippets, needs_reply flag)
-- Dashboard showing thread counts (auto-syncs on `comms`)
+- Dashboard queries live Gmail inbox count via labels API
 - Account linking (`comms link gmail` auto-detects email via OAuth)
+- Thread listing: `comms threads` fetches 50 most recent (snippet only, fast)
 - Thread fetch: `comms thread <id>` displays full conversation
 - Thread actions: archive, delete, flag, unflag, unarchive, undelete
 - Audit logging for all actions
@@ -36,19 +37,13 @@ CLI tool for AI-mediated email/messaging management. Target user has ADHD commun
 
 ## Next steps
 
-**1. Go stateless (next commit):**
-   - Remove threads table (query Gmail API directly for inbox view)
-   - Keep only: drafts, audit_log, accounts (minimal state)
-   - `comms` → live query Gmail → show counts
-   - Faster, simpler, provider is source of truth
-
-**2. Claude integration:**
+**1. Claude integration:**
    - Read threads via API calls
    - Propose actions (stored in drafts table with action_type)
    - User approves via `comms approve <id>`
    - Execute approved actions
 
-**3. Send implementation:**
+**2. Send implementation:**
    - Draft reply via Gmail API
    - Approval workflow
    - Send execution
@@ -57,24 +52,17 @@ CLI tool for AI-mediated email/messaging management. Target user has ADHD commun
 
 ## Key patterns
 
-**Thread index (SQLite):**
-```sql
-threads (
-  id TEXT,                -- Provider thread ID
-  account_id TEXT,
-  provider TEXT,
-  subject TEXT,           -- Snippet from first message
-  participants TEXT,      -- Comma-separated
-  last_message_at TEXT,   -- RFC 2822 date string
-  needs_reply INTEGER,    -- 1 if unread/needs attention
-  last_seen_hash TEXT     -- Hash for dedup
-)
-```
-
 **Adapter interface (via function signatures, not Protocol):**
 ```python
-def fetch_threads(account_id: str, email_addr: str) -> list[dict]
-def fetch_messages(account_id: str, email_addr: str, since_days: int = 7) -> list[Message]  # Legacy, unused
+def count_inbox_threads(email_addr: str) -> int
+def list_inbox_threads(email_addr: str, max_results: int = 50) -> list[dict]
+def fetch_thread_messages(thread_id: str, email_addr: str) -> list[dict]
+def archive_thread(thread_id: str, email_addr: str) -> bool
+def delete_thread(thread_id: str, email_addr: str) -> bool
+def flag_thread(thread_id: str, email_addr: str) -> bool
+def unflag_thread(thread_id: str, email_addr: str) -> bool
+def unarchive_thread(thread_id: str, email_addr: str) -> bool
+def undelete_thread(thread_id: str, email_addr: str) -> bool
 def send_message(account_id: str, email_addr: str, draft: Draft) -> bool
 def test_connection(account_id: str, email_addr: str, ...) -> tuple[bool, str]
 ```

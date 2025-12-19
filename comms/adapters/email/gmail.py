@@ -108,36 +108,30 @@ def fetch_thread_messages(thread_id: str, email_addr: str) -> list[dict]:
     return messages
 
 
-def fetch_threads(account_id: str, email_addr: str) -> list[dict]:
+def count_inbox_threads(email_addr: str) -> int:
     creds, _ = _get_credentials(email_addr)
     service = build("gmail", "v1", credentials=creds)
 
+    label = service.users().labels().get(userId="me", id="INBOX").execute()
+    return label.get("threadsTotal", 0)
+
+
+def list_inbox_threads(email_addr: str, max_results: int = 50) -> list[dict]:
+    creds, _ = _get_credentials(email_addr)
+    service = build("gmail", "v1", credentials=creds)
+
+    results = (
+        service.users().threads().list(userId="me", q="in:inbox", maxResults=max_results).execute()
+    )
+
     threads = []
-    page_token = None
-
-    while True:
-        results = (
-            service.users()
-            .threads()
-            .list(userId="me", q="in:inbox", maxResults=500, pageToken=page_token)
-            .execute()
+    for thread_ref in results.get("threads", []):
+        threads.append(
+            {
+                "id": thread_ref["id"],
+                "snippet": thread_ref.get("snippet", "(no subject)"),
+            }
         )
-
-        thread_refs = results.get("threads", [])
-        for thread_ref in thread_refs:
-            threads.append(
-                {
-                    "id": thread_ref["id"],
-                    "subject": thread_ref.get("snippet", "(no subject)"),
-                    "participants": "unknown",
-                    "last_message_at": "1970-01-01",
-                    "needs_reply": 1,
-                }
-            )
-
-        page_token = results.get("nextPageToken")
-        if not page_token:
-            break
 
     return threads
 

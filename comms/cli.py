@@ -2,7 +2,6 @@ import typer
 
 from . import accounts as accts_module
 from . import audit, db, drafts, policy
-from . import sync as sync_module
 from .adapters.email import gmail, outlook, proton
 
 app = typer.Typer(
@@ -15,14 +14,17 @@ app = typer.Typer(
 
 @app.callback(invoke_without_command=True)
 def _dashboard(ctx: typer.Context):
-    """Sync and show dashboard"""
+    """Show dashboard"""
     if ctx.invoked_subcommand is None:
-        sync_module.sync_all_accounts()
+        accounts = accts_module.list_accounts("email")
+        total_inbox = 0
+
+        for account in accounts:
+            if account["provider"] == "gmail":
+                count = gmail.count_inbox_threads(account["email"])
+                total_inbox += count
 
         with db.get_db() as conn:
-            needs_reply = conn.execute(
-                "SELECT COUNT(*) FROM threads WHERE needs_reply = 1"
-            ).fetchone()[0]
             pending_drafts = conn.execute(
                 "SELECT COUNT(*) FROM drafts WHERE approved_at IS NULL AND sent_at IS NULL"
             ).fetchone()[0]
@@ -31,7 +33,7 @@ def _dashboard(ctx: typer.Context):
             ).fetchone()[0]
 
         typer.echo("Comms Dashboard\n")
-        typer.echo(f"Threads needing reply: {needs_reply}")
+        typer.echo(f"Inbox threads: {total_inbox}")
         typer.echo(f"Pending drafts: {pending_drafts}")
         typer.echo(f"Approved (unsent): {approved_unsent}")
 
@@ -235,75 +237,41 @@ def unlink(account_id: str):
 
 
 @app.command()
-def sync():
-    """Sync inbox threads from all accounts"""
-    results = sync_module.sync_all_accounts()
-    for email_addr, count in results.items():
-        typer.echo(f"{email_addr}: {count} new threads")
+def threads():
+    """List inbox threads from all accounts"""
+    accounts = accts_module.list_accounts("email")
+
+    for account in accounts:
+        if account["provider"] == "gmail":
+            typer.echo(f"\n{account['email']}:")
+            threads = gmail.list_inbox_threads(account["email"])
+
+            if not threads:
+                typer.echo("  No threads")
+                continue
+
+            for t in threads:
+                typer.echo(f"  {t['id'][:8]} | {t['snippet'][:60]}")
 
 
 @app.command()
-def threads_list(unread_only: bool = typer.Option(True, "--all/--unread")):
-    """List email threads"""
-    with db.get_db() as conn:
-        if unread_only:
-            rows = conn.execute(
-                """
-                SELECT t.id, t.subject, t.participants, t.last_message_at,
-                       COUNT(m.id) as unread_count
-                FROM threads t
-                JOIN messages m ON t.id = m.thread_id AND m.status = 'unread'
-                GROUP BY t.id
-                ORDER BY t.last_message_at DESC
-                """
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """
-                SELECT t.id, t.subject, t.participants, t.last_message_at,
-                       COUNT(m.id) as msg_count
-                FROM threads t
-                LEFT JOIN messages m ON t.id = m.thread_id
-                GROUP BY t.id
-                ORDER BY t.last_message_at DESC
-                """
-            ).fetchall()
-
-        if not rows:
-            typer.echo("No threads found")
-            return
-
-        for row in rows:
-            count = row["unread_count"] if unread_only else row["msg_count"]
-            typer.echo(f"{row['id'][:8]} | {row['subject'][:40]:40} | {count} msgs")
-
-
-@app.command()
-def thread(thread_id: str):
+def thread(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Fetch and display full thread"""
-    with db.get_db() as conn:
-        thread_row = conn.execute(
-            "SELECT * FROM threads WHERE id LIKE ?",
-            (f"{thread_id}%",),
-        ).fetchone()
-
-        if not thread_row:
-            typer.echo(f"Thread not found: {thread_id}")
+    if not email:
+        accounts = accts_module.list_accounts("email")
+        if len(accounts) == 1:
+            email = accounts[0]["email"]
+        else:
+            typer.echo("Multiple accounts found. Specify --email")
             raise typer.Exit(1)
 
-    thread_dict = dict(thread_row)
-    account = accts_module.get_account_by_id(thread_dict["account_id"])
-    provider = account["provider"]
-    email = account["email"]
+    messages = gmail.fetch_thread_messages(thread_id, email)
 
-    if provider == "gmail":
-        messages = gmail.fetch_thread_messages(thread_dict["id"], email)
-    else:
-        typer.echo(f"Provider {provider} not yet implemented")
+    if not messages:
+        typer.echo(f"Thread not found: {thread_id}")
         raise typer.Exit(1)
 
-    typer.echo(f"\nThread: {thread_dict['subject']}")
-    typer.echo(f"Participants: {thread_dict['participants']}\n")
+    typer.echo(f"\nThread: {messages[0]['subject']}")
     typer.echo("=" * 80)
 
     for msg in messages:
@@ -314,114 +282,87 @@ def thread(thread_id: str):
 
 
 @app.command()
-def archive(thread_id: str):
+def archive(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Archive thread (remove from inbox)"""
-    with db.get_db() as conn:
-        thread_row = conn.execute(
-            "SELECT * FROM threads WHERE id LIKE ?",
-            (f"{thread_id}%",),
-        ).fetchone()
-
-        if not thread_row:
-            typer.echo(f"Thread not found: {thread_id}")
+    if not email:
+        accounts = accts_module.list_accounts("email")
+        if len(accounts) == 1:
+            email = accounts[0]["email"]
+        else:
+            typer.echo("Multiple accounts found. Specify --email")
             raise typer.Exit(1)
 
-    thread_dict = dict(thread_row)
-    account = accts_module.get_account_by_id(thread_dict["account_id"])
-
-    if account["provider"] == "gmail":
-        success = gmail.archive_thread(thread_dict["id"], account["email"])
-    else:
-        typer.echo(f"Provider {account['provider']} not yet implemented")
-        raise typer.Exit(1)
+    success = gmail.archive_thread(thread_id, email)
 
     if success:
-        typer.echo(f"Archived thread: {thread_dict['subject']}")
-        audit.log("archive", "thread", thread_dict["id"], {"reason": "manual"})
+        typer.echo(f"Archived thread: {thread_id}")
+        audit.log("archive", "thread", thread_id, {"reason": "manual"})
     else:
         typer.echo("Failed to archive thread")
         raise typer.Exit(1)
 
 
 @app.command()
-def delete(thread_id: str):
+def delete(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Delete thread (move to trash)"""
-    with db.get_db() as conn:
-        thread_row = conn.execute(
-            "SELECT * FROM threads WHERE id LIKE ?",
-            (f"{thread_id}%",),
-        ).fetchone()
-
-        if not thread_row:
-            typer.echo(f"Thread not found: {thread_id}")
+    if not email:
+        accounts = accts_module.list_accounts("email")
+        if len(accounts) == 1:
+            email = accounts[0]["email"]
+        else:
+            typer.echo("Multiple accounts found. Specify --email")
             raise typer.Exit(1)
 
-    thread_dict = dict(thread_row)
-    account = accts_module.get_account_by_id(thread_dict["account_id"])
-
-    if account["provider"] == "gmail":
-        success = gmail.delete_thread(thread_dict["id"], account["email"])
-    else:
-        typer.echo(f"Provider {account['provider']} not yet implemented")
-        raise typer.Exit(1)
+    success = gmail.delete_thread(thread_id, email)
 
     if success:
-        typer.echo(f"Deleted thread: {thread_dict['subject']}")
-        audit.log("delete", "thread", thread_dict["id"], {"reason": "manual"})
+        typer.echo(f"Deleted thread: {thread_id}")
+        audit.log("delete", "thread", thread_id, {"reason": "manual"})
     else:
         typer.echo("Failed to delete thread")
         raise typer.Exit(1)
 
 
 @app.command()
-def flag(thread_id: str):
+def flag(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Flag thread (star it)"""
-    _thread_action(thread_id, "flag", gmail.flag_thread)
+    _thread_action(thread_id, "flag", gmail.flag_thread, email)
 
 
 @app.command()
-def unflag(thread_id: str):
+def unflag(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Unflag thread (unstar it)"""
-    _thread_action(thread_id, "unflag", gmail.unflag_thread)
+    _thread_action(thread_id, "unflag", gmail.unflag_thread, email)
 
 
 @app.command()
-def unarchive(thread_id: str):
+def unarchive(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Unarchive thread (restore to inbox)"""
-    _thread_action(thread_id, "unarchive", gmail.unarchive_thread)
+    _thread_action(thread_id, "unarchive", gmail.unarchive_thread, email)
 
 
 @app.command()
-def undelete(thread_id: str):
+def undelete(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Undelete thread (restore from trash)"""
-    _thread_action(thread_id, "undelete", gmail.undelete_thread)
+    _thread_action(thread_id, "undelete", gmail.undelete_thread, email)
 
 
-def _thread_action(thread_id: str, action_name: str, action_fn):
+def _thread_action(thread_id: str, action_name: str, action_fn, email: str = None):
     """Helper to execute thread actions with audit logging"""
-    with db.get_db() as conn:
-        thread_row = conn.execute(
-            "SELECT * FROM threads WHERE id LIKE ?",
-            (f"{thread_id}%",),
-        ).fetchone()
-
-        if not thread_row:
-            typer.echo(f"Thread not found: {thread_id}")
+    if not email:
+        accounts = accts_module.list_accounts("email")
+        if len(accounts) == 1:
+            email = accounts[0]["email"]
+        else:
+            typer.echo("Multiple accounts found. Specify --email")
             raise typer.Exit(1)
 
-    thread_dict = dict(thread_row)
-    account = accts_module.get_account_by_id(thread_dict["account_id"])
-
-    if account["provider"] != "gmail":
-        typer.echo(f"Provider {account['provider']} not yet implemented")
-        raise typer.Exit(1)
-
-    success = action_fn(thread_dict["id"], account["email"])
+    success = action_fn(thread_id, email)
 
     if success:
         past_tense = f"{action_name}ged" if action_name.endswith("flag") else f"{action_name}d"
-        typer.echo(f"{past_tense.capitalize()} thread: {thread_dict['subject']}")
-        audit.log(action_name, "thread", thread_dict["id"], {"reason": "manual"})
+        typer.echo(f"{past_tense.capitalize()} thread: {thread_id}")
+        audit.log(action_name, "thread", thread_id, {"reason": "manual"})
     else:
         typer.echo(f"Failed to {action_name} thread")
         raise typer.Exit(1)
