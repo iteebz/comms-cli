@@ -51,6 +51,8 @@ class Draft:
     subject: str | None
     body: str
     claude_reasoning: str | None
+    from_account_id: str | None
+    from_addr: str | None
     created_at: datetime
     approved_at: datetime | None
     sent_at: datetime | None

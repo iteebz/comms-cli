@@ -96,9 +96,73 @@ def draft_show(draft_id: str):
 
 
 @app.command()
+def compose(
+    to: str,
+    subject: str = typer.Option(None, "--subject", "-s"),
+    body: str = typer.Option(None, "--body", "-b"),
+    cc: str = typer.Option(None, "--cc"),
+    email: str = typer.Option(None, "--email", "-e"),
+):
+    """Compose new email draft"""
+    if not body:
+        typer.echo("Error: --body required")
+        raise typer.Exit(1)
+
+    if not email:
+        accounts = accts_module.list_accounts("email")
+        if len(accounts) == 1:
+            email = accounts[0]["email"]
+        else:
+            typer.echo("Multiple accounts found. Specify --email")
+            raise typer.Exit(1)
+
+    account = None
+    for acc in accts_module.list_accounts("email"):
+        if acc["email"] == email:
+            account = acc
+            break
+
+    if not account:
+        typer.echo(f"Account not found: {email}")
+        raise typer.Exit(1)
+
+    draft_id = drafts.create_draft(
+        to_addr=to,
+        subject=subject or "(no subject)",
+        body=body,
+        cc_addr=cc,
+        from_account_id=account["id"],
+        from_addr=email,
+    )
+
+    typer.echo(f"Created draft {draft_id[:8]}")
+    typer.echo(f"From: {email}")
+    typer.echo(f"To: {to}")
+    if cc:
+        typer.echo(f"Cc: {cc}")
+    typer.echo(f"Subject: {subject or '(no subject)'}")
+    typer.echo(f"\nRun `comms approve {draft_id[:8]}` to approve for sending")
+
+
+def _resolve_draft_id(draft_id_prefix: str) -> str | None:
+    with db.get_db() as conn:
+        rows = conn.execute(
+            "SELECT id FROM drafts WHERE id LIKE ? ORDER BY created_at DESC",
+            (f"{draft_id_prefix}%",),
+        ).fetchall()
+
+        if len(rows) == 0:
+            return None
+        if len(rows) == 1:
+            return rows[0]["id"]
+        return None
+
+
+@app.command()
 def approve(draft_id: str):
     """Approve draft for sending"""
-    d = drafts.get_draft(draft_id)
+    full_id = _resolve_draft_id(draft_id) or draft_id
+    d = drafts.get_draft(full_id)
     if not d:
         typer.echo(f"Draft {draft_id} not found")
         raise typer.Exit(1)
@@ -107,15 +171,114 @@ def approve(draft_id: str):
         typer.echo("Draft already approved")
         return
 
-    allowed, errors = policy.validate_send(draft_id, d.to_addr)
+    allowed, msg = policy.check_recipient_allowed(d.to_addr)
     if not allowed:
-        typer.echo("Cannot approve draft:")
-        for err in errors:
-            typer.echo(f"  - {err}")
+        typer.echo(f"Cannot approve draft: {msg}")
         raise typer.Exit(1)
 
-    drafts.approve_draft(draft_id)
-    typer.echo(f"Approved draft {draft_id[:8]}")
+    drafts.approve_draft(full_id)
+    typer.echo(f"Approved draft {full_id[:8]}")
+    typer.echo(f"\nRun `comms send {full_id[:8]}` to send")
+
+
+@app.command()
+def reply(
+    thread_id: str,
+    body: str = typer.Option(None, "--body", "-b"),
+    email: str = typer.Option(None, "--email", "-e"),
+):
+    """Reply to thread"""
+    if not body:
+        typer.echo("Error: --body required")
+        raise typer.Exit(1)
+
+    if not email:
+        accounts = accts_module.list_accounts("email")
+        if len(accounts) == 1:
+            email = accounts[0]["email"]
+        else:
+            typer.echo("Multiple accounts found. Specify --email")
+            raise typer.Exit(1)
+
+    messages = gmail.fetch_thread_messages(thread_id, email)
+
+    if not messages:
+        typer.echo(f"Thread not found: {thread_id}")
+        raise typer.Exit(1)
+
+    account = None
+    for acc in accts_module.list_accounts("email"):
+        if acc["email"] == email:
+            account = acc
+            break
+
+    if not account:
+        typer.echo(f"Account not found: {email}")
+        raise typer.Exit(1)
+
+    original_subject = messages[0]["subject"]
+    reply_subject = (
+        original_subject if original_subject.startswith("Re: ") else f"Re: {original_subject}"
+    )
+
+    original_from = messages[-1]["from"]
+
+    draft_id = drafts.create_draft(
+        to_addr=original_from,
+        subject=reply_subject,
+        body=body,
+        thread_id=thread_id,
+        from_account_id=account["id"],
+        from_addr=email,
+    )
+
+    typer.echo(f"Created reply draft {draft_id[:8]}")
+    typer.echo(f"To: {original_from}")
+    typer.echo(f"Subject: {reply_subject}")
+    typer.echo(f"\nRun `comms approve {draft_id[:8]}` to approve for sending")
+
+
+@app.command()
+def send(draft_id: str):
+    """Send approved draft"""
+    full_id = _resolve_draft_id(draft_id) or draft_id
+    d = drafts.get_draft(full_id)
+    if not d:
+        typer.echo(f"Draft {draft_id} not found")
+        raise typer.Exit(1)
+
+    if not d.approved_at:
+        typer.echo("Draft not approved. Run `comms approve` first.")
+        raise typer.Exit(1)
+
+    if d.sent_at:
+        typer.echo("Draft already sent")
+        return
+
+    if not d.from_account_id or not d.from_addr:
+        typer.echo("Draft missing source account info")
+        raise typer.Exit(1)
+
+    account = accts_module.get_account_by_id(d.from_account_id)
+    if not account:
+        typer.echo(f"Account not found: {d.from_account_id}")
+        raise typer.Exit(1)
+
+    email = d.from_addr
+
+    if account["provider"] == "gmail":
+        success = gmail.send_message(account["id"], email, d)
+    else:
+        typer.echo(f"Provider {account['provider']} not yet implemented")
+        raise typer.Exit(1)
+
+    if success:
+        drafts.mark_sent(full_id)
+        typer.echo(f"Sent: {d.to_addr}")
+        typer.echo(f"Subject: {d.subject}")
+    else:
+        typer.echo("Failed to send")
+        raise typer.Exit(1)
 
 
 @app.command()

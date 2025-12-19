@@ -23,7 +23,7 @@ comms init
 
 ## Safety invariants
 
-- **Two-step send**: draft → approve → send
+- **Two-step send**: draft → approve → send (no bypasses, no exceptions)
 - **Audit log**: Every action logged immutably
 - **Recipient allowlist**: Default deny on sends
 - **Daily send limit**: Configurable ceiling
@@ -35,84 +35,136 @@ comms init
 # Dashboard: see how bad it is
 comms
 
-# Check system status
-comms status
+# Link Gmail account (auto-detects email via OAuth)
+comms link gmail
 
-# List pending drafts
+# List inbox threads
+comms threads
+
+# Read a thread
+comms thread <id>
+
+# Compose new email
+comms compose recipient@example.com --subject "Subject" --body "Body text"
+
+# Reply to thread
+comms reply <thread-id> --body "Reply text"
+
+# Review pending drafts
 comms drafts-list
 
-# Review a draft
-comms draft-show <id>
+# Approve draft for sending
+comms approve <draft-id>
 
-# Approve for sending
-comms approve <id>
+# Send approved draft
+comms send <draft-id>
+
+# Thread actions
+comms archive <thread-id>
+comms delete <thread-id>
+comms flag <thread-id>
 
 # View audit trail
 comms audit-log
 ```
 
-**Shared interface.** Both you and Claude run `comms` to see the current state. Same data, different consumption.
-
 ## Current status
 
-**Working:**
-- Schema + safety rails (audit log, approval flow, policy validation)
-- Email adapters: Proton Bridge, Gmail (OAuth2), Outlook (OAuth2)
-- Account management (credentials stored in system keyring)
-- Message sync from all 3 providers
-- Thread grouping and display
-- Dashboard shows unread counts
+**Working (2025-12-19):**
+- ✅ Full send flow (compose → approve → send)
+- ✅ Reply flow with thread context extraction
+- ✅ Gmail adapter (OAuth2, tested with 3 real accounts)
+- ✅ Stateless inbox (queries Gmail API directly)
+- ✅ Account linking + credential management (system keyring)
+- ✅ Thread actions (archive, delete, flag, etc.)
+- ✅ Audit logging for all operations
+- ✅ **Push notifications on phone after send** 📱
 
 **Next:**
-- Test adapters with real accounts
-- Claude mediation for draft generation
-- Auto-send rules
+- Claude integration for draft generation
+- Pattern learning from approve/reject decisions
+- Auto-approval rules for high-confidence actions
 
-## Setup
+## Setup: Gmail
 
-### Gmail
 1. Create OAuth app at https://console.cloud.google.com/apis/credentials
-2. Download `credentials.json`
+2. Download `credentials.json` to project root
 3. Add account:
    ```bash
-   comms account-add gmail you@gmail.com --credentials ~/path/to/credentials.json
+   comms link gmail
    ```
-
-### Outlook
-1. Register app at https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps
-2. Get Client ID and Secret
-3. Add account:
-   ```bash
-   comms account-add outlook you@outlook.com --client-id <id> --client-secret <secret>
-   ```
-
-### Proton (requires paid account + Bridge)
-1. Install and run Proton Bridge app
-2. Get Bridge password from app settings
-3. Add account:
-   ```bash
-   comms account-add proton you@proton.me --password <bridge-password>
-   ```
+   Browser will open for OAuth flow. Credentials stored in system keyring.
 
 ## Commands
 
 ```bash
 # Dashboard
-comms
+comms                          # Show inbox count, pending drafts
 
-# Manage accounts
-comms account-add <provider> <email> [credentials]
-comms account-list
+# Account management
+comms link gmail               # Add Gmail account (OAuth)
+comms accounts                 # List all accounts
+comms unlink <account-id>      # Remove account
 
-# Sync messages
-comms sync-now
+# Inbox
+comms threads                  # List 50 most recent threads
+comms thread <id>              # Show full conversation
 
-# View threads
-comms threads-list
-comms thread-show <thread-id>
+# Actions
+comms archive <thread-id>
+comms delete <thread-id>
+comms flag <thread-id>
+comms unflag <thread-id>
+comms unarchive <thread-id>
+comms undelete <thread-id>
 
-# Drafts (manual for now, Claude integration coming)
-comms drafts-list
-comms draft-show <id>
-comms approve <id>
+# Compose & Send
+comms compose <to> --subject "..." --body "..."
+comms reply <thread-id> --body "..."
+comms drafts-list              # Show pending drafts
+comms approve <draft-id>       # Approve for sending
+comms send <draft-id>          # Send approved draft
+
+# Audit
+comms audit-log                # Show recent actions
+comms status                   # System status + policy config
 ```
+
+## Architecture
+
+**Stateless inbox:** No local thread cache. Gmail API is source of truth. Dashboard queries live counts. Fast, simple, always fresh.
+
+**Approval-gated sends:** Every email requires explicit approval. No shortcuts. Audit log records draft creation, approval, and send as separate immutable events.
+
+**Pure functions:** No classes. Account ID passed explicitly. Credentials fetched from keyring inside functions. Easy to test, easy to reason about.
+
+**Draft lifecycle:**
+```
+compose/reply → drafts (approved_at=NULL)
+      ↓
+ approve → drafts (approved_at=NOW)
+      ↓
+  send → Gmail API send
+      ↓
+ drafts (sent_at=NOW)
+```
+
+See `CONTEXT.md` for detailed architecture, design decisions, and future roadmap.
+
+## Safety
+
+- Drafts table tracks source account (`from_account_id`, `from_addr`)
+- Policy validation before approval (recipient allowlist, daily send limits)
+- Audit log records all mutations
+- OAuth tokens stored in system keyring (never on disk)
+- No auto-send without explicit user opt-in per pattern
+
+## Testing
+
+No mocks. Real accounts. End-to-end tested:
+1. Compose email from Account A → Account B
+2. Wait ~10 seconds
+3. Reply from Account B → Account A  
+4. Verify push notification on phone
+
+Result: **It works.** Full email loop proven.

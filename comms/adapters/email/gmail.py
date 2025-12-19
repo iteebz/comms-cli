@@ -85,7 +85,7 @@ def fetch_thread_messages(thread_id: str, email_addr: str) -> list[dict]:
 
     messages = []
     for msg in thread.get("messages", []):
-        headers = {h["name"]: h["value"] for h in msg["payload"].get("headers", [])}
+        headers = {h["name"].lower(): h["value"] for h in msg["payload"].get("headers", [])}
 
         body = ""
         if "parts" in msg["payload"]:
@@ -98,9 +98,9 @@ def fetch_thread_messages(thread_id: str, email_addr: str) -> list[dict]:
 
         messages.append(
             {
-                "from": headers.get("From", ""),
-                "date": headers.get("Date", ""),
-                "subject": headers.get("Subject", ""),
+                "from": headers.get("from", ""),
+                "date": headers.get("date", ""),
+                "subject": headers.get("subject", ""),
                 "body": body,
             }
         )
