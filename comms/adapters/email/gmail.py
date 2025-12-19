@@ -77,6 +77,40 @@ def test_connection(account_id: str, email_addr: str) -> tuple[bool, str]:
         return False, f"Connection failed: {e}"
 
 
+def fetch_threads(account_id: str, email_addr: str) -> list[dict]:
+    creds, _ = _get_credentials(email_addr)
+    service = build("gmail", "v1", credentials=creds)
+
+    threads = []
+    page_token = None
+
+    while True:
+        results = (
+            service.users()
+            .threads()
+            .list(userId="me", q="in:inbox", maxResults=500, pageToken=page_token)
+            .execute()
+        )
+
+        thread_refs = results.get("threads", [])
+        for thread_ref in thread_refs:
+            threads.append(
+                {
+                    "id": thread_ref["id"],
+                    "subject": thread_ref.get("snippet", "(no subject)")[:50],
+                    "participants": "unknown",
+                    "last_message_at": "1970-01-01",
+                    "needs_reply": 1,
+                }
+            )
+
+        page_token = results.get("nextPageToken")
+        if not page_token:
+            break
+
+    return threads
+
+
 def fetch_messages(account_id: str, email_addr: str, since_days: int = 7) -> list[Message]:
     creds, _ = _get_credentials(email_addr)
     service = build("gmail", "v1", credentials=creds)

@@ -16,32 +16,15 @@ CREATE TABLE threads (
     subject TEXT,
     participants TEXT NOT NULL,
     last_message_at TIMESTAMP,
+    needs_reply INTEGER DEFAULT 0,
+    last_seen_hash TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (account_id) REFERENCES accounts(id)
-);
-
-CREATE TABLE messages (
-    id TEXT PRIMARY KEY,
-    thread_id TEXT NOT NULL,
-    account_id TEXT NOT NULL,
-    provider TEXT NOT NULL,
-    from_addr TEXT NOT NULL,
-    to_addr TEXT NOT NULL,
-    subject TEXT,
-    body TEXT NOT NULL,
-    body_html TEXT,
-    headers TEXT,
-    status TEXT DEFAULT 'unread',
-    timestamp TIMESTAMP NOT NULL,
-    synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (thread_id) REFERENCES threads(id),
     FOREIGN KEY (account_id) REFERENCES accounts(id)
 );
 
 CREATE TABLE drafts (
     id TEXT PRIMARY KEY,
     thread_id TEXT,
-    message_id TEXT,
     to_addr TEXT NOT NULL,
     cc_addr TEXT,
     subject TEXT,
@@ -50,8 +33,7 @@ CREATE TABLE drafts (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     approved_at TIMESTAMP,
     sent_at TIMESTAMP,
-    FOREIGN KEY (thread_id) REFERENCES threads(id),
-    FOREIGN KEY (message_id) REFERENCES messages(id)
+    FOREIGN KEY (thread_id) REFERENCES threads(id)
 );
 
 CREATE TABLE send_queue (
@@ -85,10 +67,8 @@ CREATE TABLE rules (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_messages_thread ON messages(thread_id);
-CREATE INDEX idx_messages_status ON messages(status);
-CREATE INDEX idx_messages_timestamp ON messages(timestamp);
 CREATE INDEX idx_threads_account ON threads(account_id);
+CREATE INDEX idx_threads_needs_reply ON threads(needs_reply);
 CREATE INDEX idx_drafts_approved ON drafts(approved_at);
 CREATE INDEX idx_send_queue_status ON send_queue(status);
 CREATE INDEX idx_audit_log_timestamp ON audit_log(timestamp);

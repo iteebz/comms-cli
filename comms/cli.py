@@ -1,7 +1,8 @@
 import typer
 
 from . import accounts as accts_module
-from . import audit, db, drafts, policy, sync
+from . import audit, db, drafts, policy
+from . import sync as sync_module
 from .adapters.email import gmail, outlook, proton
 
 app = typer.Typer(
@@ -14,11 +15,13 @@ app = typer.Typer(
 
 @app.callback(invoke_without_command=True)
 def _dashboard(ctx: typer.Context):
-    """Show dashboard: unread threads, pending drafts, the damage"""
+    """Sync and show dashboard"""
     if ctx.invoked_subcommand is None:
+        sync_module.sync_all_accounts()
+
         with db.get_db() as conn:
-            unread_count = conn.execute(
-                "SELECT COUNT(*) FROM messages WHERE status = 'unread'"
+            needs_reply = conn.execute(
+                "SELECT COUNT(*) FROM threads WHERE needs_reply = 1"
             ).fetchone()[0]
             pending_drafts = conn.execute(
                 "SELECT COUNT(*) FROM drafts WHERE approved_at IS NULL AND sent_at IS NULL"
@@ -28,7 +31,7 @@ def _dashboard(ctx: typer.Context):
             ).fetchone()[0]
 
         typer.echo("Comms Dashboard\n")
-        typer.echo(f"Unread messages: {unread_count}")
+        typer.echo(f"Threads needing reply: {needs_reply}")
         typer.echo(f"Pending drafts: {pending_drafts}")
         typer.echo(f"Approved (unsent): {approved_unsent}")
 
@@ -232,13 +235,11 @@ def unlink(account_id: str):
 
 
 @app.command()
-def sync_now(
-    since_days: int = typer.Option(7, "--days", "-d", help="Sync messages from last N days"),
-):
-    """Sync all email accounts"""
-    results = sync.sync_all_accounts(since_days)
+def sync():
+    """Sync inbox threads from all accounts"""
+    results = sync_module.sync_all_accounts()
     for email_addr, count in results.items():
-        typer.echo(f"{email_addr}: {count} new messages")
+        typer.echo(f"{email_addr}: {count} new threads")
 
 
 @app.command()

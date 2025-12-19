@@ -90,6 +90,10 @@ def test_connection(
         return False, f"Connection failed: {e}"
 
 
+def fetch_threads(account_id: str, email_addr: str) -> list[dict]:
+    return []
+
+
 def fetch_messages(account_id: str, email_addr: str, since_days: int = 7) -> list[Message]:
     token = _get_access_token(email_addr)
     if not token:

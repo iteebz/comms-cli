@@ -40,6 +40,10 @@ def test_connection(account_id: str, email_addr: str) -> tuple[bool, str]:
         return False, f"Connection failed: {e}"
 
 
+def fetch_threads(account_id: str, email_addr: str) -> list[dict]:
+    return []
+
+
 def fetch_messages(account_id: str, email_addr: str, since_days: int = 7) -> list[Message]:
     password = _get_password(email_addr)
     if not password:

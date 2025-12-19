@@ -6,6 +6,8 @@ CLI tool for AI-mediated email/messaging management. Target user has ADHD commun
 
 ## Architecture decisions
 
+**Inbox index, not email client:** SQLite stores thread metadata only (subject, participants, needs_reply flag). No message bodies. Providers remain source of truth. Fetch threads on-demand when needed.
+
 **Pure functions over classes:** All adapters are pure functions. No OOP ceremony. Account ID passed explicitly, credentials fetched from keyring inside functions.
 
 **No shared abstraction yet:** Proton, Gmail, Outlook adapters have identical function signatures but different implementations. Duplication is fine until pattern proven across 5+ providers.
@@ -15,49 +17,48 @@ CLI tool for AI-mediated email/messaging management. Target user has ADHD commun
 ## Current state (2025-12-19)
 
 **Done:**
-- Database schema (accounts, threads, messages, drafts, send_queue, audit_log, rules)
-- Three email adapters working (code complete, not yet tested with real accounts):
-  - Proton Bridge (IMAP/SMTP on localhost)
-  - Gmail (OAuth2 + Gmail API)
-  - Outlook (OAuth2 + Microsoft Graph)
-- Sync system that normalizes all providers → `Message` model
-- Thread grouping and display
-- Dashboard showing unread counts
-- Approval-required send flow
-- Audit logging
+- Database schema (accounts, threads, drafts, send_queue, audit_log, rules)
+- Gmail adapter tested with 3 real accounts (OAuth2 + Gmail API)
+- Inbox sync: fetches thread index from Gmail (subject snippets, needs_reply flag)
+- Dashboard showing thread counts
+- Account linking (`comms link gmail` auto-detects email via OAuth)
+- Approval-required send flow (schema only, not implemented)
+- Audit logging (schema only, not implemented)
 
 **Not done:**
-- Real-world testing of any adapter
+- On-demand thread fetch (full message bodies when opening a thread)
 - Claude mediation for draft generation
+- Send implementation
 - Auto-send rules
+- Proton/Outlook adapters (stubs exist, not implemented)
 - Messaging adapters (Signal, WhatsApp, Messenger)
 
 ## Next steps
 
-1. **Test Gmail adapter with real account** - Proves OAuth flow, message parsing, thread grouping work
+1. **On-demand thread fetch** - Fetch full thread bodies from Gmail API when user opens a thread
 2. **Claude draft generation** - Simple Anthropic API wrapper, reads thread context + style guide
-3. **Auto-approve rules** - Pattern matching for trusted senders/simple acks
+3. **Send flow** - Implement actual sending via Gmail API
 
 ## Key patterns
 
-**Message normalization:**
-```python
-@dataclass
-class Message:
-    id: str              # Hash of msg_id + from + timestamp
-    thread_id: str       # Hash of conversation ID
-    account_id: str      # Links to accounts table
-    provider: str        # "gmail", "proton", "outlook"
-    from_addr: str       # Email or phone number
-    to_addr: str
-    subject: str         # None for messaging
-    body: str
-    ...
+**Thread index (SQLite):**
+```sql
+threads (
+  id TEXT,                -- Provider thread ID
+  account_id TEXT,
+  provider TEXT,
+  subject TEXT,           -- Snippet from first message
+  participants TEXT,      -- Comma-separated
+  last_message_at TEXT,   -- RFC 2822 date string
+  needs_reply INTEGER,    -- 1 if unread/needs attention
+  last_seen_hash TEXT     -- Hash for dedup
+)
 ```
 
 **Adapter interface (via function signatures, not Protocol):**
 ```python
-def fetch_messages(account_id: str, email_addr: str, since_days: int = 7) -> list[Message]
+def fetch_threads(account_id: str, email_addr: str) -> list[dict]
+def fetch_messages(account_id: str, email_addr: str, since_days: int = 7) -> list[Message]  # Legacy, unused
 def send_message(account_id: str, email_addr: str, draft: Draft) -> bool
 def test_connection(account_id: str, email_addr: str, ...) -> tuple[bool, str]
 ```
