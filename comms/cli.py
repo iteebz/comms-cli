@@ -1,6 +1,7 @@
 import typer
 
-from . import accounts, audit, db, drafts, policy, sync
+from . import accounts as accts_module
+from . import audit, db, drafts, policy, sync
 from .adapters.email import gmail, outlook, proton
 
 app = typer.Typer(
@@ -123,49 +124,58 @@ def audit_log(limit: int = 20):
 
 
 @app.command()
-def account_add(
+def link(
     provider: str = typer.Argument(..., help="Provider: proton, gmail, outlook"),
-    email: str = typer.Argument(..., help="Email address"),
+    email: str = typer.Argument(
+        None, help="Email (required for proton/outlook, auto-detected for gmail)"
+    ),
     password: str = typer.Option(
         None, "--password", "-p", help="Password (Proton Bridge password)"
-    ),
-    credentials: str = typer.Option(
-        None, "--credentials", "-c", help="Path to credentials.json (Gmail OAuth)"
     ),
     client_id: str = typer.Option(None, "--client-id", help="OAuth Client ID (Outlook)"),
     client_secret: str = typer.Option(
         None, "--client-secret", help="OAuth Client Secret (Outlook)"
     ),
 ):
-    """Add email account"""
+    """Link email account"""
     if provider not in ["proton", "gmail", "outlook"]:
         typer.echo(f"Unknown provider: {provider}")
         raise typer.Exit(1)
 
-    account_id = accounts.add_email_account(provider, email)
+    if provider == "gmail":
+        try:
+            email = gmail.init_oauth()
+            typer.echo(f"OAuth completed: {email}")
+        except Exception as e:
+            typer.echo(f"OAuth failed: {e}")
+            raise typer.Exit(1) from None
 
-    if provider == "proton":
+        account_id = accts_module.add_email_account(provider, email)
+        success, msg = gmail.test_connection(account_id, email)
+        if not success:
+            typer.echo(f"Failed to connect: {msg}")
+            raise typer.Exit(1)
+
+    elif provider == "proton":
+        if not email:
+            typer.echo("Proton requires email address")
+            raise typer.Exit(1)
+
         if not password:
             password = typer.prompt("Proton Bridge Password", hide_input=True)
+
+        account_id = accts_module.add_email_account(provider, email)
         proton.store_credentials(email, password)
         success, msg = proton.test_connection(account_id, email)
         if not success:
             typer.echo(f"Failed to connect: {msg}")
             raise typer.Exit(1)
 
-    elif provider == "gmail":
-        if not credentials:
-            typer.echo("Gmail requires --credentials path to credentials.json")
-            typer.echo("Get it from: https://console.cloud.google.com/apis/credentials")
-            raise typer.Exit(1)
-
-        gmail.store_credentials(email, credentials)
-        success, msg = gmail.test_connection(account_id, email, credentials)
-        if not success:
-            typer.echo(f"Failed to connect: {msg}")
-            raise typer.Exit(1)
-
     elif provider == "outlook":
+        if not email:
+            typer.echo("Outlook requires email address")
+            raise typer.Exit(1)
+
         if not client_id or not client_secret:
             typer.echo("Outlook requires --client-id and --client-secret")
             typer.echo(
@@ -173,20 +183,21 @@ def account_add(
             )
             raise typer.Exit(1)
 
+        account_id = accts_module.add_email_account(provider, email)
         outlook.store_credentials(email, client_id, client_secret)
         success, msg = outlook.test_connection(account_id, email, client_id, client_secret)
         if not success:
             typer.echo(f"Failed to connect: {msg}")
             raise typer.Exit(1)
 
-    typer.echo(f"Added {provider} account: {email}")
+    typer.echo(f"Linked {provider}: {email}")
     typer.echo(f"Account ID: {account_id}")
 
 
 @app.command()
-def account_list():
+def accounts():
     """List all accounts"""
-    accts = accounts.list_accounts()
+    accts = accts_module.list_accounts()
     if not accts:
         typer.echo("No accounts configured")
         return
@@ -194,6 +205,30 @@ def account_list():
     for acct in accts:
         status = "✓" if acct["enabled"] else "✗"
         typer.echo(f"{status} {acct['provider']:10} {acct['email']:30} {acct['id'][:8]}")
+
+
+@app.command()
+def unlink(account_id: str):
+    """Unlink account by ID or email"""
+    accts = accts_module.list_accounts()
+    matching = [a for a in accts if a["id"].startswith(account_id) or a["email"] == account_id]
+
+    if not matching:
+        typer.echo(f"No account found matching: {account_id}")
+        raise typer.Exit(1)
+
+    if len(matching) > 1:
+        typer.echo(f"Multiple accounts match '{account_id}':")
+        for acct in matching:
+            typer.echo(f"  {acct['id'][:8]} {acct['provider']} {acct['email']}")
+        raise typer.Exit(1)
+
+    acct = matching[0]
+    if accts_module.remove_account(acct["id"]):
+        typer.echo(f"Unlinked {acct['provider']}: {acct['email']}")
+    else:
+        typer.echo("Failed to unlink account")
+        raise typer.Exit(1)
 
 
 @app.command()

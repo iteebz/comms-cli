@@ -38,3 +38,9 @@ def list_accounts(service_type: str | None = None):
         else:
             rows = conn.execute("SELECT * FROM accounts").fetchall()
         return [dict(row) for row in rows]
+
+
+def remove_account(account_id: str) -> bool:
+    with get_db() as conn:
+        cursor = conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+        return cursor.rowcount > 0

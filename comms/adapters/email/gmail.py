@@ -3,6 +3,7 @@ import hashlib
 import json
 from datetime import datetime
 from email.mime.text import MIMEText
+from pathlib import Path
 
 import keyring
 from google.auth.transport.requests import Request
@@ -12,9 +13,14 @@ from googleapiclient.discovery import build
 
 from ...models import Draft, Message
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
+SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/gmail.modify",
+]
 SERVICE_NAME = "comms-cli/gmail"
 TOKEN_KEY_SUFFIX = "/token"
+CREDENTIALS_PATH = Path.home() / "space/repos/comms-cli/gmail_credentials.json"
 
 
 def _get_token(email_addr: str) -> dict | None:
@@ -28,33 +34,42 @@ def _set_token(email_addr: str, token_dict: dict):
     keyring.set_password(SERVICE_NAME, f"{email_addr}{TOKEN_KEY_SUFFIX}", json.dumps(token_dict))
 
 
-def _get_credentials(email_addr: str, credentials_path: str | None = None) -> Credentials:
-    token_data = _get_token(email_addr)
-    creds = None
+def _get_credentials(email_addr: str | None = None) -> tuple[Credentials, str]:
+    if email_addr:
+        token_data = _get_token(email_addr)
+        creds = None
 
-    if token_data:
-        creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+        if token_data:
+            creds = Credentials.from_authorized_user_info(token_data, SCOPES)
 
-    if not creds or not creds.valid:
+        if creds and creds.valid:
+            return creds, email_addr
+
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
-        else:
-            if not credentials_path:
-                raise ValueError("credentials.json path required for initial OAuth flow")
+            _set_token(email_addr, json.loads(creds.to_json()))
+            return creds, email_addr
 
-            flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
-            creds = flow.run_local_server(port=0)
+    if not CREDENTIALS_PATH.exists():
+        raise ValueError(f"Gmail credentials not found at {CREDENTIALS_PATH}")
 
-        _set_token(email_addr, json.loads(creds.to_json()))
+    flow = InstalledAppFlow.from_client_secrets_file(str(CREDENTIALS_PATH), SCOPES)
+    creds = flow.run_local_server(port=0)
 
-    return creds
+    service = build("oauth2", "v2", credentials=creds)
+    user_info = service.userinfo().get().execute()
+    email = user_info.get("email")
+
+    if not email:
+        raise ValueError("Failed to get email from OAuth token")
+
+    _set_token(email, json.loads(creds.to_json()))
+    return creds, email
 
 
-def test_connection(
-    account_id: str, email_addr: str, credentials_path: str | None = None
-) -> tuple[bool, str]:
+def test_connection(account_id: str, email_addr: str) -> tuple[bool, str]:
     try:
-        creds = _get_credentials(email_addr, credentials_path)
+        creds, _ = _get_credentials(email_addr)
         service = build("gmail", "v1", credentials=creds)
         service.users().getProfile(userId="me").execute()
         return True, "Connected successfully"
@@ -63,7 +78,7 @@ def test_connection(
 
 
 def fetch_messages(account_id: str, email_addr: str, since_days: int = 7) -> list[Message]:
-    creds = _get_credentials(email_addr)
+    creds, _ = _get_credentials(email_addr)
     service = build("gmail", "v1", credentials=creds)
 
     query = f"newer_than:{since_days}d"
@@ -120,7 +135,7 @@ def fetch_messages(account_id: str, email_addr: str, since_days: int = 7) -> lis
 
 def send_message(account_id: str, email_addr: str, draft: Draft) -> bool:
     try:
-        creds = _get_credentials(email_addr)
+        creds, _ = _get_credentials(email_addr)
         service = build("gmail", "v1", credentials=creds)
 
         message = MIMEText(draft.body)
@@ -137,5 +152,6 @@ def send_message(account_id: str, email_addr: str, draft: Draft) -> bool:
         return False
 
 
-def store_credentials(email_addr: str, credentials_path: str):
-    _get_credentials(email_addr, credentials_path)
+def init_oauth() -> str:
+    _, email = _get_credentials()
+    return email
