@@ -1,0 +1,40 @@
+import uuid
+
+from .config import add_account as config_add_account
+from .db import get_db
+
+
+def add_email_account(provider: str, email: str) -> str:
+    account_id = str(uuid.uuid4())
+
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO accounts (id, service_type, provider, email, enabled)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (account_id, "email", provider, email, 1),
+        )
+
+    config_add_account("email", {"provider": provider, "email": email, "id": account_id})
+
+    return account_id
+
+
+def get_account_by_id(account_id: str):
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+        if row:
+            return dict(row)
+    return None
+
+
+def list_accounts(service_type: str | None = None):
+    with get_db() as conn:
+        if service_type:
+            rows = conn.execute(
+                "SELECT * FROM accounts WHERE service_type = ?", (service_type,)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM accounts").fetchall()
+        return [dict(row) for row in rows]

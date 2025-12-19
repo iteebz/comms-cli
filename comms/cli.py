@@ -1,6 +1,7 @@
 import typer
 
-from . import audit, db, drafts, policy
+from . import accounts, audit, db, drafts, policy, sync
+from .adapters.email import proton
 
 app = typer.Typer(
     name="comms",
@@ -119,6 +120,121 @@ def audit_log(limit: int = 20):
         typer.echo(
             f"{log_entry['timestamp']} | {log_entry['action']} | {log_entry['entity_type']}:{log_entry['entity_id'][:8]}"
         )
+
+
+@app.command()
+def account_add(
+    provider: str = typer.Argument(..., help="Provider: proton, gmail, outlook"),
+    email: str = typer.Argument(..., help="Email address"),
+    password: str = typer.Option(
+        None, "--password", "-p", help="Password (will prompt if not provided)"
+    ),
+):
+    """Add email account"""
+    if provider not in ["proton", "gmail", "outlook"]:
+        typer.echo(f"Unknown provider: {provider}")
+        raise typer.Exit(1)
+
+    if not password:
+        password = typer.prompt("Password", hide_input=True)
+
+    account_id = accounts.add_email_account(provider, email)
+
+    if provider == "proton":
+        proton.store_credentials(email, password)
+        success, msg = proton.test_connection(account_id, email)
+        if not success:
+            typer.echo(f"Failed to connect: {msg}")
+            raise typer.Exit(1)
+
+    typer.echo(f"Added {provider} account: {email}")
+    typer.echo(f"Account ID: {account_id}")
+
+
+@app.command()
+def account_list():
+    """List all accounts"""
+    accts = accounts.list_accounts()
+    if not accts:
+        typer.echo("No accounts configured")
+        return
+
+    for acct in accts:
+        status = "✓" if acct["enabled"] else "✗"
+        typer.echo(f"{status} {acct['provider']:10} {acct['email']:30} {acct['id'][:8]}")
+
+
+@app.command()
+def sync_now(
+    since_days: int = typer.Option(7, "--days", "-d", help="Sync messages from last N days"),
+):
+    """Sync all email accounts"""
+    results = sync.sync_all_accounts(since_days)
+    for email_addr, count in results.items():
+        typer.echo(f"{email_addr}: {count} new messages")
+
+
+@app.command()
+def threads_list(unread_only: bool = typer.Option(True, "--all/--unread")):
+    """List email threads"""
+    with db.get_db() as conn:
+        if unread_only:
+            rows = conn.execute(
+                """
+                SELECT t.id, t.subject, t.participants, t.last_message_at,
+                       COUNT(m.id) as unread_count
+                FROM threads t
+                JOIN messages m ON t.id = m.thread_id AND m.status = 'unread'
+                GROUP BY t.id
+                ORDER BY t.last_message_at DESC
+                """
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT t.id, t.subject, t.participants, t.last_message_at,
+                       COUNT(m.id) as msg_count
+                FROM threads t
+                LEFT JOIN messages m ON t.id = m.thread_id
+                GROUP BY t.id
+                ORDER BY t.last_message_at DESC
+                """
+            ).fetchall()
+
+        if not rows:
+            typer.echo("No threads found")
+            return
+
+        for row in rows:
+            count = row["unread_count"] if unread_only else row["msg_count"]
+            typer.echo(f"{row['id'][:8]} | {row['subject'][:40]:40} | {count} msgs")
+
+
+@app.command()
+def thread_show(thread_id: str):
+    """Show thread messages"""
+    with db.get_db() as conn:
+        messages = conn.execute(
+            """
+            SELECT from_addr, subject, body, timestamp, status
+            FROM messages
+            WHERE thread_id LIKE ?
+            ORDER BY timestamp ASC
+            """,
+            (f"{thread_id}%",),
+        ).fetchall()
+
+        if not messages:
+            typer.echo(f"No messages found for thread: {thread_id}")
+            return
+
+        for msg in messages:
+            status_icon = "●" if msg["status"] == "unread" else "○"
+            typer.echo(f"\n{status_icon} From: {msg['from_addr']}")
+            typer.echo(f"Subject: {msg['subject']}")
+            typer.echo(f"Date: {msg['timestamp']}")
+            typer.echo(f"\n{msg['body']}\n")
+            typer.echo("-" * 80)
 
 
 def main():
