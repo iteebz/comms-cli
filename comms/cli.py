@@ -1,7 +1,7 @@
 import typer
 
 from . import accounts, audit, db, drafts, policy, sync
-from .adapters.email import gmail, proton
+from .adapters.email import gmail, outlook, proton
 
 app = typer.Typer(
     name="comms",
@@ -132,6 +132,10 @@ def account_add(
     credentials: str = typer.Option(
         None, "--credentials", "-c", help="Path to credentials.json (Gmail OAuth)"
     ),
+    client_id: str = typer.Option(None, "--client-id", help="OAuth Client ID (Outlook)"),
+    client_secret: str = typer.Option(
+        None, "--client-secret", help="OAuth Client Secret (Outlook)"
+    ),
 ):
     """Add email account"""
     if provider not in ["proton", "gmail", "outlook"]:
@@ -157,6 +161,20 @@ def account_add(
 
         gmail.store_credentials(email, credentials)
         success, msg = gmail.test_connection(account_id, email, credentials)
+        if not success:
+            typer.echo(f"Failed to connect: {msg}")
+            raise typer.Exit(1)
+
+    elif provider == "outlook":
+        if not client_id or not client_secret:
+            typer.echo("Outlook requires --client-id and --client-secret")
+            typer.echo(
+                "Get them from: https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps"
+            )
+            raise typer.Exit(1)
+
+        outlook.store_credentials(email, client_id, client_secret)
+        success, msg = outlook.test_connection(account_id, email, client_id, client_secret)
         if not success:
             typer.echo(f"Failed to connect: {msg}")
             raise typer.Exit(1)
