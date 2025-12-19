@@ -46,6 +46,16 @@ def init():
 
 
 @app.command()
+def backup():
+    """Backup database to ~/.comms_backups/{timestamp}/"""
+    backup_path = db.backup_db()
+    if backup_path:
+        typer.echo(f"Backup created: {backup_path}")
+    else:
+        typer.echo("No database to backup")
+
+
+@app.command()
 def status():
     """Show system status"""
     from .config import get_policy

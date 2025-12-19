@@ -1,5 +1,7 @@
+import shutil
 import sqlite3
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 
 from . import config
@@ -36,8 +38,31 @@ def load_migrations() -> list[tuple[str, str]]:
     return migrations
 
 
+def backup_db(db_path: Path | None = None) -> Path | None:
+    db_path = db_path if db_path else config.DB_PATH
+
+    if not db_path.exists():
+        return None
+
+    if db_path.stat().st_size == 0:
+        return None
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_dir = config.BACKUP_DIR / timestamp
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    backup_path = backup_dir / db_path.name
+    shutil.copy2(db_path, backup_path)
+
+    return backup_path
+
+
 def init(db_path: Path | None = None):
     db_path = db_path if db_path else config.DB_PATH
+
+    if db_path.exists() and db_path.stat().st_size > 0:
+        backup_db(db_path)
+
     db_path.parent.mkdir(exist_ok=True)
     with get_db(db_path) as conn:
         create_migrations_table_sql = f"""
