@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "comms-cli"
+version = "0.1.0"
+description = "AI-managed comms for ADHD brains"
+authors = [{name = "Tyson Chan", email = "tyson.chan@proton.me"}]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "typer>=0.17.4",
+    "pyyaml>=6.0.3",
+    "anthropic>=0.40.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.13.0",
+    "pytest>=8.4.1",
+    "pre-commit>=4.0.1",
+]
+
+[project.scripts]
+comms = "comms.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["comms"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "SIM",    # flake8-simplify
+    "RET",    # flake8-return
+]
+ignore = [
+    "SIM108",
+    "SIM117",
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]

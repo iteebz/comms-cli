@@ -1,0 +1,12 @@
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+*.db
+*.db-journal
+.comms/
+.life_backups/
+.ci.log
