@@ -549,6 +549,8 @@ def review(status: str = typer.Option(None, "--status", "-s")):
         )
         if p["agent_reasoning"]:
             typer.echo(f"   agent: {p['agent_reasoning']}")
+        if p["correction"]:
+            typer.echo(f"   correction: {p['correction']}")
         if p["user_reasoning"]:
             typer.echo(f"   user:  {p['user_reasoning']}")
 
@@ -592,10 +594,16 @@ def approve(
 def reject(
     proposal_id: str,
     human: str = typer.Option(None, "--human", help="Human reasoning for rejection"),
+    correct: str = typer.Option(
+        None, "--correct", help="Corrected action (e.g., 'delete' instead of 'archive')"
+    ),
 ):
-    """Reject proposal"""
-    if proposals.reject_proposal(proposal_id, user_reasoning=human):
-        typer.echo(f"Rejected {proposal_id[:8]}")
+    """Reject proposal (optionally with correction)"""
+    if proposals.reject_proposal(proposal_id, user_reasoning=human, correction=correct):
+        if correct:
+            typer.echo(f"Rejected {proposal_id[:8]} with correction: {correct}")
+        else:
+            typer.echo(f"Rejected {proposal_id[:8]}")
     else:
         typer.echo("Failed to reject (not found or already processed)")
         raise typer.Exit(1)

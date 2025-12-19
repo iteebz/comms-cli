@@ -165,7 +165,9 @@ def approve_proposal(proposal_id: str, user_reasoning: str | None = None) -> boo
     return True
 
 
-def reject_proposal(proposal_id: str, user_reasoning: str | None = None) -> bool:
+def reject_proposal(
+    proposal_id: str, user_reasoning: str | None = None, correction: str | None = None
+) -> bool:
     full_id = _resolve_proposal_id(proposal_id) or proposal_id
 
     with get_db() as conn:
@@ -180,19 +182,27 @@ def reject_proposal(proposal_id: str, user_reasoning: str | None = None) -> bool
         conn.execute(
             """
             UPDATE proposals
-            SET status = 'rejected', rejected_at = ?, user_reasoning = ?
+            SET status = 'rejected', rejected_at = ?, user_reasoning = ?, correction = ?
             WHERE id = ?
             """,
-            (datetime.now(), user_reasoning, full_id),
+            (datetime.now(), user_reasoning, correction, full_id),
         )
+
+    decision_type = "rejected_with_correction" if correction else "rejected"
+    metadata = {
+        "proposal_id": proposal_id,
+        "agent_reasoning": proposal["agent_reasoning"],
+    }
+    if correction:
+        metadata["correction"] = correction
 
     audit.log_decision(
         proposed_action=proposal["proposed_action"],
         entity_type=proposal["entity_type"],
         entity_id=proposal["entity_id"],
-        user_decision="rejected",
+        user_decision=decision_type,
         reasoning=user_reasoning,
-        metadata={"proposal_id": proposal_id, "agent_reasoning": proposal["agent_reasoning"]},
+        metadata=metadata,
     )
 
     return True
