@@ -561,13 +561,18 @@ def propose(
     agent: str = typer.Option(None, "--agent", help="Agent reasoning"),
 ):
     """Create proposal"""
-    proposal_id = proposals.create_proposal(
+    proposal_id, error = proposals.create_proposal(
         entity_type=entity_type,
         entity_id=entity_id,
         proposed_action=action,
         agent_reasoning=agent,
     )
-    typer.echo(f"Created proposal {proposal_id[:8]}")
+
+    if proposal_id:
+        typer.echo(f"Created proposal {proposal_id[:8]}")
+    else:
+        typer.echo(f"Failed to create proposal: {error}")
+        raise typer.Exit(1)
 
 
 @app.command()

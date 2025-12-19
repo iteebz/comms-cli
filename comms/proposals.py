@@ -1,8 +1,64 @@
 import uuid
 from datetime import datetime
 
+from . import accounts as accts_module
 from . import audit
+from .adapters.email import gmail
 from .db import get_db
+
+VALID_THREAD_ACTIONS = {"archive", "delete", "flag", "unflag", "unarchive", "undelete"}
+VALID_DRAFT_ACTIONS = {"approve", "send", "delete"}
+
+
+def _validate_entity(entity_type: str, entity_id: str) -> tuple[bool, str]:
+    if entity_type == "thread":
+        accounts = accts_module.list_accounts("email")
+        if not accounts:
+            return False, "No email accounts configured"
+
+        account = accounts[0]
+        email = account["email"]
+
+        try:
+            if account["provider"] == "gmail":
+                messages = gmail.fetch_thread_messages(entity_id, email)
+                if not messages:
+                    return False, f"Thread {entity_id} not found"
+                return True, ""
+            return False, f"Provider {account['provider']} not supported for validation"
+        except Exception as e:
+            return False, f"Failed to validate thread: {e}"
+
+    elif entity_type == "draft":
+        from . import drafts
+
+        draft = drafts.get_draft(entity_id)
+        if not draft:
+            return False, f"Draft {entity_id} not found"
+        return True, ""
+
+    else:
+        return False, f"Unknown entity_type: {entity_type}"
+
+
+def _validate_action(entity_type: str, proposed_action: str) -> tuple[bool, str]:
+    if entity_type == "thread":
+        if proposed_action not in VALID_THREAD_ACTIONS:
+            return (
+                False,
+                f"Invalid action '{proposed_action}' for thread. Valid: {VALID_THREAD_ACTIONS}",
+            )
+        return True, ""
+
+    if entity_type == "draft":
+        if proposed_action not in VALID_DRAFT_ACTIONS:
+            return (
+                False,
+                f"Invalid action '{proposed_action}' for draft. Valid: {VALID_DRAFT_ACTIONS}",
+            )
+        return True, ""
+
+    return False, f"Unknown entity_type: {entity_type}"
 
 
 def create_proposal(
@@ -10,7 +66,17 @@ def create_proposal(
     entity_id: str,
     proposed_action: str,
     agent_reasoning: str | None = None,
-) -> str:
+    skip_validation: bool = False,
+) -> tuple[str | None, str]:
+    if not skip_validation:
+        valid_action, msg = _validate_action(entity_type, proposed_action)
+        if not valid_action:
+            return None, msg
+
+        valid_entity, msg = _validate_entity(entity_type, entity_id)
+        if not valid_entity:
+            return None, msg
+
     proposal_id = str(uuid.uuid4())
 
     with get_db() as conn:
@@ -30,7 +96,7 @@ def create_proposal(
             ),
         )
 
-    return proposal_id
+    return proposal_id, ""
 
 
 def get_proposal(proposal_id: str) -> dict | None:
