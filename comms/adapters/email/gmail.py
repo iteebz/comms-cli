@@ -77,6 +77,37 @@ def test_connection(account_id: str, email_addr: str) -> tuple[bool, str]:
         return False, f"Connection failed: {e}"
 
 
+def fetch_thread_messages(thread_id: str, email_addr: str) -> list[dict]:
+    creds, _ = _get_credentials(email_addr)
+    service = build("gmail", "v1", credentials=creds)
+
+    thread = service.users().threads().get(userId="me", id=thread_id, format="full").execute()
+
+    messages = []
+    for msg in thread.get("messages", []):
+        headers = {h["name"]: h["value"] for h in msg["payload"].get("headers", [])}
+
+        body = ""
+        if "parts" in msg["payload"]:
+            for part in msg["payload"]["parts"]:
+                if part["mimeType"] == "text/plain" and "data" in part["body"]:
+                    body = base64.urlsafe_b64decode(part["body"]["data"]).decode()
+                    break
+        elif "body" in msg["payload"] and "data" in msg["payload"]["body"]:
+            body = base64.urlsafe_b64decode(msg["payload"]["body"]["data"]).decode()
+
+        messages.append(
+            {
+                "from": headers.get("From", ""),
+                "date": headers.get("Date", ""),
+                "subject": headers.get("Subject", ""),
+                "body": body,
+            }
+        )
+
+    return messages
+
+
 def fetch_threads(account_id: str, email_addr: str) -> list[dict]:
     creds, _ = _get_credentials(email_addr)
     service = build("gmail", "v1", credentials=creds)
@@ -97,7 +128,7 @@ def fetch_threads(account_id: str, email_addr: str) -> list[dict]:
             threads.append(
                 {
                     "id": thread_ref["id"],
-                    "subject": thread_ref.get("snippet", "(no subject)")[:50],
+                    "subject": thread_ref.get("snippet", "(no subject)"),
                     "participants": "unknown",
                     "last_message_at": "1970-01-01",
                     "needs_reply": 1,
@@ -181,6 +212,80 @@ def send_message(account_id: str, email_addr: str, draft: Draft) -> bool:
 
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
         service.users().messages().send(userId="me", body={"raw": raw}).execute()
+        return True
+    except Exception:
+        return False
+
+
+def archive_thread(thread_id: str, email_addr: str) -> bool:
+    creds, _ = _get_credentials(email_addr)
+    service = build("gmail", "v1", credentials=creds)
+
+    try:
+        service.users().threads().modify(
+            userId="me", id=thread_id, body={"removeLabelIds": ["INBOX"]}
+        ).execute()
+        return True
+    except Exception:
+        return False
+
+
+def delete_thread(thread_id: str, email_addr: str) -> bool:
+    creds, _ = _get_credentials(email_addr)
+    service = build("gmail", "v1", credentials=creds)
+
+    try:
+        service.users().threads().trash(userId="me", id=thread_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def flag_thread(thread_id: str, email_addr: str) -> bool:
+    creds, _ = _get_credentials(email_addr)
+    service = build("gmail", "v1", credentials=creds)
+
+    try:
+        service.users().threads().modify(
+            userId="me", id=thread_id, body={"addLabelIds": ["STARRED"]}
+        ).execute()
+        return True
+    except Exception:
+        return False
+
+
+def unflag_thread(thread_id: str, email_addr: str) -> bool:
+    creds, _ = _get_credentials(email_addr)
+    service = build("gmail", "v1", credentials=creds)
+
+    try:
+        service.users().threads().modify(
+            userId="me", id=thread_id, body={"removeLabelIds": ["STARRED"]}
+        ).execute()
+        return True
+    except Exception:
+        return False
+
+
+def unarchive_thread(thread_id: str, email_addr: str) -> bool:
+    creds, _ = _get_credentials(email_addr)
+    service = build("gmail", "v1", credentials=creds)
+
+    try:
+        service.users().threads().modify(
+            userId="me", id=thread_id, body={"addLabelIds": ["INBOX"]}
+        ).execute()
+        return True
+    except Exception:
+        return False
+
+
+def undelete_thread(thread_id: str, email_addr: str) -> bool:
+    creds, _ = _get_credentials(email_addr)
+    service = build("gmail", "v1", credentials=creds)
+
+    try:
+        service.users().threads().untrash(userId="me", id=thread_id).execute()
         return True
     except Exception:
         return False

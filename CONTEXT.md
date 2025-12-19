@@ -20,13 +20,14 @@ CLI tool for AI-mediated email/messaging management. Target user has ADHD commun
 - Database schema (accounts, threads, drafts, send_queue, audit_log, rules)
 - Gmail adapter tested with 3 real accounts (OAuth2 + Gmail API)
 - Inbox sync: fetches thread index from Gmail (subject snippets, needs_reply flag)
-- Dashboard showing thread counts
+- Dashboard showing thread counts (auto-syncs on `comms`)
 - Account linking (`comms link gmail` auto-detects email via OAuth)
+- Thread fetch: `comms thread <id>` displays full conversation
+- Thread actions: archive, delete, flag, unflag, unarchive, undelete
+- Audit logging for all actions
 - Approval-required send flow (schema only, not implemented)
-- Audit logging (schema only, not implemented)
 
 **Not done:**
-- On-demand thread fetch (full message bodies when opening a thread)
 - Claude mediation for draft generation
 - Send implementation
 - Auto-send rules
@@ -35,9 +36,24 @@ CLI tool for AI-mediated email/messaging management. Target user has ADHD commun
 
 ## Next steps
 
-1. **On-demand thread fetch** - Fetch full thread bodies from Gmail API when user opens a thread
-2. **Claude draft generation** - Simple Anthropic API wrapper, reads thread context + style guide
-3. **Send flow** - Implement actual sending via Gmail API
+**1. Go stateless (next commit):**
+   - Remove threads table (query Gmail API directly for inbox view)
+   - Keep only: drafts, audit_log, accounts (minimal state)
+   - `comms` → live query Gmail → show counts
+   - Faster, simpler, provider is source of truth
+
+**2. Claude integration:**
+   - Read threads via API calls
+   - Propose actions (stored in drafts table with action_type)
+   - User approves via `comms approve <id>`
+   - Execute approved actions
+
+**3. Send implementation:**
+   - Draft reply via Gmail API
+   - Approval workflow
+   - Send execution
+
+**Long-term goal:** User runs `comms`, I process inbox to zero autonomously with approval gates on sends.
 
 ## Key patterns
 
