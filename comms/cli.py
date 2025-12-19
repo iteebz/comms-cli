@@ -444,6 +444,17 @@ def threads(
                 typer.echo(f"  {t['id'][:8]} | {date_str:16} | {t['snippet'][:50]}")
 
 
+def _resolve_thread_id(prefix: str, email: str) -> str | None:
+    if len(prefix) >= 16:
+        return prefix
+    threads = gmail.list_threads(email, label="inbox", max_results=100)
+    threads += gmail.list_threads(email, label="unread", max_results=100)
+    for t in threads:
+        if t["id"].startswith(prefix):
+            return t["id"]
+    return None
+
+
 @app.command()
 def thread(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Fetch and display full thread"""
@@ -455,7 +466,8 @@ def thread(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
             typer.echo("Multiple accounts found. Specify --email")
             raise typer.Exit(1)
 
-    messages = gmail.fetch_thread_messages(thread_id, email)
+    full_id = _resolve_thread_id(thread_id, email) or thread_id
+    messages = gmail.fetch_thread_messages(full_id, email)
 
     if not messages:
         typer.echo(f"Thread not found: {thread_id}")
