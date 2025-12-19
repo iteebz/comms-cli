@@ -17,26 +17,35 @@ CLI tool for AI-mediated email/messaging management. Target user has ADHD commun
 ## Current state (2025-12-19)
 
 **Done:**
-- Database schema (accounts, drafts, send_queue, audit_log, rules)
+- Database schema (accounts, drafts, send_queue, audit_log, rules, proposals)
 - Stateless inbox (removed threads table, query Gmail API directly)
 - Gmail adapter tested with 3 real accounts (OAuth2 + Gmail API)
-- Dashboard queries live Gmail inbox count via labels API (114 threads)
+- Dashboard queries live Gmail inbox count via labels API
 - Account linking (`comms link gmail` auto-detects email via OAuth)
 - Thread listing: `comms threads` fetches 50 most recent (snippet only, fast)
 - Thread fetch: `comms thread <id>` displays full conversation
 - Thread actions: archive, delete, flag, unflag, unarchive, undelete
 - **Full send flow:**
   - `comms compose` - create draft with source account tracking
-  - `comms approve` - validate recipient, mark approved
+  - `comms approve-draft` - validate recipient, mark approved
   - `comms send` - send via Gmail API from stored account
   - `comms reply <thread_id>` - extract thread context, create reply draft
   - Draft ID prefix matching (8 chars → full UUID)
   - Account tracking: `from_account_id` + `from_addr` in drafts table
   - Case-insensitive header parsing (Gmail API quirk)
-- Audit logging for all actions
+- **Proposal flow (NEW):**
+  - `comms propose <action> <entity_type> <entity_id> --agent "reasoning"`
+  - `comms review` - list all proposals with agent/human reasoning
+  - `comms approve <proposal_id> --human "reasoning"` - approve proposal
+  - `comms reject <proposal_id> --human "reasoning"` - reject proposal
+  - `comms resolve` - execute all approved proposals in batch
+  - Proposal ID prefix matching (8 chars → full UUID)
+  - Decision logging: captures agent reasoning + human decision + optional human reasoning
+- Audit logging for all actions + decision trail
 - **End-to-end tested:** compose → approve → send → **push notification on phone**
 
 **Not done:**
+- Proposal validation (entity must exist before creation)
 - Claude mediation for draft generation
 - Auto-send rules
 - Proton/Outlook adapters (stubs exist, not implemented)
@@ -44,20 +53,25 @@ CLI tool for AI-mediated email/messaging management. Target user has ADHD commun
 
 ## Next steps
 
-**1. Claude integration (PRIMARY NEXT FEATURE):**
-   - Claude reads inbox threads on-demand (via this interactive session)
-   - Proposes actions: archive/delete/flag/reply
-   - Drafts replies using thread context
-   - User approves via `comms approve <id>`
-   - Execute approved actions
-   - **Note:** `comms process` as a standalone command is NOT needed—Claude Code session IS the processor
+**1. Proposal validation (IMMEDIATE):**
+   - Validate entity exists before creating proposal
+   - Validate action is valid for entity_type
+   - Return clear error messages
 
-**2. Pattern learning (later):**
-   - Log approve/reject decisions to extract patterns
+**2. Claude integration (PRIMARY):**
+   - Claude reads inbox threads on-demand (via this interactive session)
+   - Proposes actions via `proposals.create_proposal()` with agent reasoning
+   - User reviews via `comms review`
+   - User approves/rejects via `comms approve/reject`
+   - User executes via `comms resolve`
+   - **Note:** Claude Code session IS the processor, no separate `comms process` needed
+
+**3. Pattern learning (later):**
+   - Extract patterns from proposals table (approved vs rejected decisions)
    - Build confidence scores for common actions
    - Enable auto-approval for high-confidence non-send actions
 
-**3. Additional providers:**
+**4. Additional providers:**
    - Finish Proton adapter (Bridge IMAP)
    - Finish Outlook adapter (Microsoft Graph API)
    - Messaging: Signal CLI, WhatsApp Business API
@@ -146,12 +160,31 @@ Audit log records all three steps immutably. No shortcuts, no bypasses.
 ```
 compose/reply → drafts (approved_at=NULL, from_account_id set)
        ↓
-  approve → drafts (approved_at=NOW)
+  approve-draft → drafts (approved_at=NOW)
        ↓
    send → Gmail API (using from_account_id)
        ↓
   drafts (sent_at=NOW)
 ```
+
+**Proposal lifecycle:**
+```
+propose → proposals (status=pending, agent_reasoning set)
+       ↓
+  review → display all proposals
+       ↓
+approve/reject → proposals (status=approved/rejected, user_reasoning set)
+       ↓
+  resolve → execute approved proposals → mark executed
+       ↓
+  proposals (status=executed, executed_at=NOW)
+```
+
+Decision logging captures:
+- `proposed_action` - what agent suggested
+- `agent_reasoning` - why agent proposed it
+- `user_decision` - approved/rejected
+- `user_reasoning` - optional explanation from human
 
 ## Design principles
 

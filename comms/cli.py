@@ -1,7 +1,7 @@
 import typer
 
 from . import accounts as accts_module
-from . import audit, db, drafts, policy
+from . import audit, db, drafts, policy, proposals
 from .adapters.email import gmail, outlook, proton
 
 app = typer.Typer(
@@ -159,7 +159,7 @@ def _resolve_draft_id(draft_id_prefix: str) -> str | None:
 
 
 @app.command()
-def approve(draft_id: str):
+def approve_draft(draft_id: str):
     """Approve draft for sending"""
     full_id = _resolve_draft_id(draft_id) or draft_id
     d = drafts.get_draft(full_id)
@@ -529,6 +529,130 @@ def _thread_action(thread_id: str, action_name: str, action_fn, email: str = Non
     else:
         typer.echo(f"Failed to {action_name} thread")
         raise typer.Exit(1)
+
+
+@app.command()
+def review(status: str = typer.Option(None, "--status", "-s")):
+    """Review proposals"""
+    props = proposals.list_proposals(status=status)
+
+    if not props:
+        typer.echo("No proposals")
+        return
+
+    for p in props:
+        status_icon = {"pending": "⧗", "approved": "✓", "rejected": "✗", "executed": "✓✓"}.get(
+            p["status"], "?"
+        )
+        typer.echo(
+            f"{status_icon} {p['id'][:8]} | {p['proposed_action']:10} {p['entity_type']:8} {p['entity_id'][:8]}"
+        )
+        if p["agent_reasoning"]:
+            typer.echo(f"   agent: {p['agent_reasoning']}")
+        if p["user_reasoning"]:
+            typer.echo(f"   user:  {p['user_reasoning']}")
+
+
+@app.command()
+def propose(
+    action: str,
+    entity_type: str,
+    entity_id: str,
+    agent: str = typer.Option(None, "--agent", help="Agent reasoning"),
+):
+    """Create proposal"""
+    proposal_id = proposals.create_proposal(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        proposed_action=action,
+        agent_reasoning=agent,
+    )
+    typer.echo(f"Created proposal {proposal_id[:8]}")
+
+
+@app.command()
+def approve(
+    proposal_id: str,
+    human: str = typer.Option(None, "--human", help="Human reasoning for approval"),
+):
+    """Approve proposal"""
+    if proposals.approve_proposal(proposal_id, user_reasoning=human):
+        typer.echo(f"Approved {proposal_id[:8]}")
+    else:
+        typer.echo("Failed to approve (not found or already processed)")
+        raise typer.Exit(1)
+
+
+@app.command()
+def reject(
+    proposal_id: str,
+    human: str = typer.Option(None, "--human", help="Human reasoning for rejection"),
+):
+    """Reject proposal"""
+    if proposals.reject_proposal(proposal_id, user_reasoning=human):
+        typer.echo(f"Rejected {proposal_id[:8]}")
+    else:
+        typer.echo("Failed to reject (not found or already processed)")
+        raise typer.Exit(1)
+
+
+@app.command()
+def resolve():
+    """Execute all approved proposals"""
+    approved = proposals.get_approved_proposals()
+
+    if not approved:
+        typer.echo("No approved proposals to execute")
+        return
+
+    executed_count = 0
+    failed_count = 0
+
+    for p in approved:
+        action = p["proposed_action"]
+        entity_type = p["entity_type"]
+        entity_id = p["entity_id"]
+
+        typer.echo(f"Executing: {action} {entity_type} {entity_id[:8]}")
+
+        try:
+            if entity_type == "thread":
+                account = accts_module.list_accounts("email")[0]
+                email = account["email"]
+
+                if action == "archive":
+                    success = gmail.archive_thread(entity_id, email)
+                elif action == "delete":
+                    success = gmail.delete_thread(entity_id, email)
+                elif action == "flag":
+                    success = gmail.flag_thread(entity_id, email)
+                elif action == "unflag":
+                    success = gmail.unflag_thread(entity_id, email)
+                elif action == "unarchive":
+                    success = gmail.unarchive_thread(entity_id, email)
+                elif action == "undelete":
+                    success = gmail.undelete_thread(entity_id, email)
+                else:
+                    typer.echo(f"  Unknown action: {action}")
+                    failed_count += 1
+                    continue
+
+                if success:
+                    proposals.mark_executed(p["id"])
+                    executed_count += 1
+                    typer.echo(f"  ✓ {action} completed")
+                else:
+                    typer.echo(f"  ✗ {action} failed")
+                    failed_count += 1
+            else:
+                typer.echo(f"  Unknown entity type: {entity_type}")
+                failed_count += 1
+
+        except Exception as e:
+            typer.echo(f"  ✗ Error: {e}")
+            failed_count += 1
+
+    typer.echo(f"\nExecuted: {executed_count}, Failed: {failed_count}")
 
 
 def main():
