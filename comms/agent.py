@@ -77,8 +77,73 @@ COMMAND_MAP = {
     "status": "comms status",
     "triage": "comms triage --dry-run -n 10",
     "stats": "comms stats",
+    "threads": "comms threads -l inbox",
+    "accounts": "comms accounts",
+    "review": "comms review",
+    "resolve": "comms resolve",
     "help": None,
 }
+
+
+def parse_natural_language(text: str) -> Command | None:
+    import json
+
+    prompt = f"""Parse this message into a comms command. Return JSON only.
+
+AVAILABLE COMMANDS:
+- inbox: show unified inbox
+- status: show system status
+- triage: AI triage inbox
+- threads: list email threads
+- accounts: list accounts
+- review: show pending proposals
+- resolve: execute approved proposals
+- archive <id>: archive thread
+- delete <id>: delete thread
+- ping: test connection
+- help: show commands
+
+MESSAGE: {text}
+
+OUTPUT FORMAT (JSON only, no explanation):
+{{"action": "command_name", "args": ["arg1", "arg2"]}}
+
+If not a command request, return: {{"action": null}}"""
+
+    try:
+        result = subprocess.run(
+            [
+                "claude",
+                "--print",
+                "--model",
+                "claude-haiku-4-5",
+                "-p",
+                prompt,
+                "--dangerously-skip-permissions",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return None
+
+        output = result.stdout.strip()
+        if output.startswith("```"):
+            lines = output.split("\n")
+            output = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
+
+        data = json.loads(output)
+        if not data.get("action"):
+            return None
+
+        return Command(
+            action=data["action"],
+            args=data.get("args", []),
+            raw=text,
+        )
+    except Exception:
+        return None
 
 
 def _run_comms_command(cmd: str) -> tuple[bool, str]:
@@ -133,15 +198,19 @@ def execute_command(cmd: Command) -> CommandResult:
     return CommandResult(success=False, message=f"Unknown command: {action}", executed=action)
 
 
-def process_message(phone: str, sender: str, body: str) -> CommandResult | None:
+def process_message(
+    phone: str, sender: str, body: str, use_nlp: bool = False
+) -> CommandResult | None:
     authorized = get_authorized_senders()
     if authorized and sender not in authorized:
         return None
 
-    if not is_command(body):
-        return None
+    cmd = None
+    if is_command(body):
+        cmd = parse_command(body)
+    elif use_nlp:
+        cmd = parse_natural_language(body)
 
-    cmd = parse_command(body)
     if not cmd:
         return None
 
