@@ -228,6 +228,34 @@ def audit_log(limit: int = 20):
 
 
 @app.command()
+def stats():
+    """Show learning stats from decisions"""
+    from . import learning
+
+    action_stats = learning.get_decision_stats()
+    if not action_stats:
+        typer.echo("No decision data yet")
+        return
+
+    typer.echo("Action Stats:")
+    for action, s in sorted(action_stats.items(), key=lambda x: -x[1].total):
+        typer.echo(
+            f"  {action:12} | {s.total:3} total | {s.accuracy:.0%} accuracy | "
+            f"{s.approved} approved, {s.rejected} rejected, {s.corrected} corrected"
+        )
+
+    patterns = learning.get_correction_patterns()
+    if patterns:
+        typer.echo("\nCorrection Patterns:")
+        for p in patterns[:5]:
+            typer.echo(f"  {p['original']} → {p['corrected']} ({p['count']}x)")
+
+    suggestions = learning.suggest_auto_approve()
+    if suggestions:
+        typer.echo(f"\nAuto-approve candidates (≥95% accuracy, ≥10 samples): {suggestions}")
+
+
+@app.command()
 def link(
     provider: str = typer.Argument(..., help="Provider: gmail, outlook, proton, signal"),
     identifier: str = typer.Argument(

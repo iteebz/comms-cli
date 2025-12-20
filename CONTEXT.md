@@ -4,27 +4,31 @@
 
 CLI tool for AI-mediated communication. Target user has ADHD—messages pile up because attention doesn't flow toward replying. Claude triages, drafts, sends. Human approves.
 
-## Current state (2025-12-20)
+## Current state (2025-12-21)
 
 **Email (Gmail):**
 - 3 accounts linked, OAuth2, stateless inbox
 - Full send flow: compose → approve → send
-- Triage flow: propose → review → approve/reject → resolve
 - Thread actions: archive, delete, flag, unflag, unarchive, undelete
-- Correction tracking for learning
 
 **Signal:**
 - Linked as secondary device via signal-cli
-- Send/receive messages
-- Local message storage (signal-cli doesn't persist)
+- Send/receive/reply messages
+- Daemon mode (background polling)
+- Local message storage (signal-cli consumes on receive)
 - Conversation inbox + history views
+
+**Triage:**
+- Unified proposal flow for email + Signal
+- propose → review → approve/reject → resolve
+- Correction tracking with pattern learning
+- `comms stats` shows accuracy + correction patterns
 
 **Not done:**
 - Outlook adapter (stub exists)
 - Proton adapter (requires paid Bridge)
-- WhatsApp/Messenger (no API access)
 - Draft generation
-- Pattern learning from corrections
+- Auto-approve based on confidence
 
 ## Architecture
 
@@ -72,6 +76,9 @@ comms messages          # receive + store
 comms signal-inbox      # view conversations
 comms signal-history    # view thread with contact
 comms signal-send       # send message
+comms signal-reply      # reply to stored message
+comms daemon-start      # background polling
+comms daemon-stop
 ```
 
 ## Adapter signatures
@@ -121,8 +128,12 @@ comms messages           # receive + store new
 comms signal-inbox       # conversations
 comms signal-history <phone>
 comms signal-send <phone> -m "..."
+comms signal-reply <msg-id> -m "..."
 comms signal-contacts
 comms signal-groups
+comms daemon-start       # background polling
+comms daemon-stop
+comms daemon-status
 
 # Triage
 comms propose <action> <entity_type> <entity_id> --agent "reasoning"
@@ -136,6 +147,7 @@ comms accounts
 comms backup
 comms rules
 comms audit-log
+comms stats              # learning stats
 ```
 
 ## Commit style

@@ -26,24 +26,29 @@ Attention scaffolding for ADHD brains. Not "AI email"—AI-mediated communicatio
 
 ---
 
-## Stage 1 — Multi-Provider (current)
+## Stage 1 — Multi-Provider ✅
 
 **Done:**
 - Gmail adapter (3 accounts, full flow)
-- Signal adapter (send, receive, storage)
+- Signal adapter (send, receive, reply, storage)
+- Signal daemon mode (background polling)
+- Unified triage for email + Signal
 
-**Next:**
-- Signal daemon mode (continuous receive)
-- Signal reply flow with context
+**Not done:**
 - Group message support
 
 ---
 
-## Stage 2 — Learning Loop
+## Stage 2 — Learning Loop (current)
 
-- Confidence scores from approve/reject history
-- Auto-approve safe actions (archive/delete)
-- Dashboard: accuracy trends, correction patterns
+**Done:**
+- Correction tracking in proposals
+- `comms stats` shows accuracy + patterns
+- Confidence calculation per action
+
+**Next:**
+- Auto-approve high-confidence actions (>95%, 10+ samples)
+- Threshold config in policy
 
 ---
 
@@ -69,7 +74,7 @@ comms signal-send +... -m "Build complete: ✅"
 ```
 
 **Requires:**
-- Daemon mode (always listening)
+- Daemon mode (always listening) ✅
 - Command parsing from messages
 - Agent handoff protocol
 

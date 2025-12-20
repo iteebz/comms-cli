@@ -40,21 +40,21 @@ comms signal-inbox            # View conversations
 comms signal-history +123...  # Message history
 ```
 
-## Current status (2025-12-20)
+## Current status (2025-12-21)
 
 **Working:**
 - ✅ Gmail (3 accounts, OAuth2, stateless inbox)
-- ✅ Signal (send, receive, local storage, conversations)
+- ✅ Signal (send, receive, reply, local storage, conversations)
+- ✅ Signal daemon mode (background polling)
 - ✅ Full send flow (compose → approve → send)
-- ✅ Triage flow (propose → review → resolve)
-- ✅ Correction tracking for learning
+- ✅ Unified triage (email + Signal proposals)
+- ✅ Pattern learning from corrections
 - ✅ Audit logging
 
 **Not done:**
 - Outlook/Proton adapters
 - Draft generation
-- Pattern learning
-- Daemon mode
+- Auto-approve based on confidence
 
 ## Commands
 
@@ -71,8 +71,12 @@ comms messages [--timeout 10]
 comms signal-inbox
 comms signal-history <phone>
 comms signal-send <phone> -m "..."
+comms signal-reply <msg-id> -m "..."
 comms signal-contacts
 comms signal-groups
+comms daemon-start [--interval 5]
+comms daemon-stop
+comms daemon-status
 
 # Drafts
 comms drafts-list
@@ -91,6 +95,7 @@ comms accounts
 comms backup
 comms rules
 comms audit-log
+comms stats                  # Learning stats from corrections
 ```
 
 ## Setup
