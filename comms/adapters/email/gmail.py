@@ -23,6 +23,34 @@ TOKEN_KEY_SUFFIX = "/token"
 CREDENTIALS_PATH = Path.home() / "space/repos/comms-cli/gmail_credentials.json"
 
 
+def _headers_map(headers: list[dict], lower: bool = True) -> dict:
+    if lower:
+        return {h["name"].lower(): h["value"] for h in headers}
+    return {h["name"]: h["value"] for h in headers}
+
+
+def _decode_body(data: str | None) -> str:
+    if not data:
+        return ""
+    try:
+        return base64.urlsafe_b64decode(data).decode(errors="replace")
+    except Exception:
+        return ""
+
+
+def _extract_body(payload: dict) -> str:
+    parts = payload.get("parts") or []
+    for part in parts:
+        if part.get("mimeType") == "text/plain":
+            return _decode_body(part.get("body", {}).get("data"))
+        if part.get("mimeType", "").startswith("multipart/"):
+            nested = _extract_body(part)
+            if nested:
+                return nested
+
+    return _decode_body(payload.get("body", {}).get("data"))
+
+
 def _get_token(email_addr: str) -> dict | None:
     token_json = keyring.get_password(SERVICE_NAME, f"{email_addr}{TOKEN_KEY_SUFFIX}")
     if token_json:
@@ -85,16 +113,8 @@ def fetch_thread_messages(thread_id: str, email_addr: str) -> list[dict]:
 
     messages = []
     for msg in thread.get("messages", []):
-        headers = {h["name"].lower(): h["value"] for h in msg["payload"].get("headers", [])}
-
-        body = ""
-        if "parts" in msg["payload"]:
-            for part in msg["payload"]["parts"]:
-                if part["mimeType"] == "text/plain" and "data" in part["body"]:
-                    body = base64.urlsafe_b64decode(part["body"]["data"]).decode()
-                    break
-        elif "body" in msg["payload"] and "data" in msg["payload"]["body"]:
-            body = base64.urlsafe_b64decode(msg["payload"]["body"]["data"]).decode()
+        headers = _headers_map(msg["payload"].get("headers", []))
+        body = _extract_body(msg["payload"])
 
         messages.append(
             {
@@ -183,22 +203,14 @@ def fetch_messages(account_id: str, email_addr: str, since_days: int = 7) -> lis
     for msg_ref in message_ids:
         msg = service.users().messages().get(userId="me", id=msg_ref["id"], format="full").execute()
 
-        headers = {h["name"]: h["value"] for h in msg["payload"]["headers"]}
-        msg_id = headers.get("Message-ID", msg_ref["id"])
+        headers = _headers_map(msg["payload"].get("headers", []))
+        msg_id = headers.get("message-id", msg_ref["id"])
         thread_id = msg.get("threadId", msg_id)
-        from_addr = headers.get("From", "")
-        to_addr = headers.get("To", "")
-        subject = headers.get("Subject", "")
-        date_str = headers.get("Date", "")
-
-        body = ""
-        if "parts" in msg["payload"]:
-            for part in msg["payload"]["parts"]:
-                if part["mimeType"] == "text/plain" and "data" in part["body"]:
-                    body = base64.urlsafe_b64decode(part["body"]["data"]).decode()
-                    break
-        elif "body" in msg["payload"] and "data" in msg["payload"]["body"]:
-            body = base64.urlsafe_b64decode(msg["payload"]["body"]["data"]).decode()
+        from_addr = headers.get("from", "")
+        to_addr = headers.get("to", "")
+        subject = headers.get("subject", "")
+        date_str = headers.get("date", "")
+        body = _extract_body(msg["payload"])
 
         msg_hash = hashlib.sha256(f"{msg_id}{from_addr}{date_str}".encode()).hexdigest()[:16]
         thread_hash = hashlib.sha256(thread_id.encode()).hexdigest()[:16]
