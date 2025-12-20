@@ -110,6 +110,27 @@ def contacts():
 
 
 @app.command()
+def templates(init: bool = typer.Option(False, "--init", help="Create default templates file")):
+    """Show reply templates (edit at ~/.comms/templates.md)"""
+    from ..templates import TEMPLATES_PATH, get_templates, init_templates
+
+    if init:
+        init_templates()
+        typer.echo(f"Created templates at: {TEMPLATES_PATH}")
+        return
+
+    all_templates = get_templates()
+    if not all_templates:
+        typer.echo("No templates. Run `comms templates --init` to create defaults.")
+        return
+
+    for t in all_templates:
+        typer.echo(f"## {t.name}")
+        typer.echo(f"  {t.body[:60]}...")
+        typer.echo()
+
+
+@app.command()
 def status():
     """Show system status"""
     from ..config import get_policy

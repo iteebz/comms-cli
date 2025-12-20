@@ -3,6 +3,7 @@
 import subprocess
 
 from .contacts import get_contact_context
+from .templates import format_templates_for_prompt
 
 
 def _extract_sender_from_context(context: str) -> str:
@@ -28,11 +29,16 @@ def generate_reply(
         tags = f" [{', '.join(contact.tags)}]" if contact.tags else ""
         contact_info = f"\nCONTACT NOTES{tags}: {contact.notes}"
 
+    templates = format_templates_for_prompt()
+
     prompt = f"""You are drafting an email reply. Be concise and professional.
 
 THREAD CONTEXT:
 {thread_context}
 {contact_info}
+
+{templates}
+
 {f"INSTRUCTIONS: {instructions}" if instructions else ""}
 
 OUTPUT FORMAT:
