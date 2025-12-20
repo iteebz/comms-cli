@@ -257,6 +257,46 @@ def reply(
 
 
 @app.command()
+def draft_reply(
+    thread_id: str,
+    instructions: str = typer.Option(None, "--instructions", "-i", help="Instructions for Claude"),
+    email: str = typer.Option(None, "--email", "-e"),
+):
+    """Generate reply draft using Claude"""
+    from . import claude
+
+    full_id = _run_service(services.resolve_thread_id, thread_id, email) or thread_id
+    messages = _run_service(services.fetch_thread, full_id, email)
+
+    context_lines = []
+    for msg in messages[-5:]:
+        context_lines.append(f"From: {msg['from']}")
+        context_lines.append(f"Date: {msg['date']}")
+        context_lines.append(f"Body: {msg['body'][:500]}")
+        context_lines.append("---")
+
+    context = "\n".join(context_lines)
+
+    typer.echo("Generating draft...")
+    body, reasoning = claude.generate_reply(context, instructions)
+
+    if not body:
+        typer.echo(f"Failed: {reasoning}")
+        raise typer.Exit(1)
+
+    draft_id, original_from, reply_subject = _run_service(
+        services.reply_to_thread, thread_id=full_id, body=body, email=email
+    )
+
+    typer.echo(f"\nReasoning: {reasoning}")
+    typer.echo(f"\nDraft {draft_id[:8]}:")
+    typer.echo(f"To: {original_from}")
+    typer.echo(f"Subject: {reply_subject}")
+    typer.echo(f"\n{body}\n")
+    typer.echo(f"Run `comms approve {draft_id[:8]}` to approve")
+
+
+@app.command()
 def send(draft_id: str):
     """Send approved draft"""
     full_id = drafts.resolve_draft_id(draft_id) or draft_id
@@ -523,6 +563,42 @@ def signal_reply(
     else:
         typer.echo(f"Failed: {result}")
         raise typer.Exit(1)
+
+
+@app.command()
+def signal_draft(
+    contact: str = typer.Argument(..., help="Phone number to reply to"),
+    instructions: str = typer.Option(None, "--instructions", "-i", help="Instructions for Claude"),
+    phone: str = typer.Option(None, "--phone", "-p"),
+):
+    """Generate Signal reply using Claude"""
+    from . import claude
+
+    phone = _get_signal_phone(phone)
+    msgs = signal.get_messages(phone=phone, sender=contact, limit=10)
+
+    if not msgs:
+        typer.echo(f"No messages from {contact}")
+        raise typer.Exit(1)
+
+    typer.echo("Generating reply...")
+    body, reasoning = claude.generate_signal_reply(msgs, instructions)
+
+    if not body:
+        typer.echo(f"Failed: {reasoning}")
+        raise typer.Exit(1)
+
+    typer.echo(f"\nReasoning: {reasoning}")
+    typer.echo(f"\nDraft reply to {contact}:")
+    typer.echo(f"  {body}\n")
+
+    if typer.confirm("Send this reply?"):
+        success, result = signal.send(phone, contact, body)
+        if success:
+            typer.echo("Sent!")
+        else:
+            typer.echo(f"Failed: {result}")
+            raise typer.Exit(1)
 
 
 @app.command()
