@@ -105,6 +105,7 @@ AVAILABLE COMMANDS:
 - draft <thread_id>: generate reply draft for thread
 - approve <draft_id>: approve a draft
 - send <draft_id>: send approved draft
+- summarize <thread_id>: summarize a thread
 - archive <id>: archive thread
 - delete <id>: delete thread
 - ping: test connection
@@ -209,6 +210,15 @@ def execute_command(cmd: Command) -> CommandResult:
             success=success,
             message=output,
             executed=f"draft-reply {thread_id}",
+        )
+
+    if action == "summarize" and cmd.args:
+        thread_id = cmd.args[0]
+        success, output = _run_comms_command(f"comms summarize {thread_id}")
+        return CommandResult(
+            success=success,
+            message=output,
+            executed=f"summarize {thread_id}",
         )
 
     if action == "approve" and cmd.args:

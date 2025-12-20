@@ -46,6 +46,19 @@ def thread(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
 
 
 @app.command()
+def summarize(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
+    """Summarize thread using Claude"""
+    from .. import claude
+
+    full_id = run_service(services.resolve_thread_id, thread_id, email) or thread_id
+    messages = run_service(services.fetch_thread, full_id, email)
+
+    typer.echo(f"Summarizing {len(messages)} messages...")
+    summary = claude.summarize_thread(messages)
+    typer.echo(f"\n{summary}")
+
+
+@app.command()
 def archive(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Archive thread (remove from inbox)"""
     run_service(services.thread_action, "archive", thread_id, email)

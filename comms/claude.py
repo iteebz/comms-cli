@@ -1,4 +1,4 @@
-"""Headless Claude invocation for draft generation."""
+"""Headless Claude invocation for draft generation and summarization."""
 
 import subprocess
 
@@ -149,3 +149,49 @@ Yeah 3pm works for me, see you then!"""
         body = output
 
     return body.strip(), reasoning.strip()
+
+
+def summarize_thread(
+    messages: list[dict],
+    model: str = "claude-haiku-4-5",
+) -> str:
+    """Summarize an email thread. Returns summary string."""
+    context_lines = []
+    for msg in messages:
+        context_lines.append(f"From: {msg.get('from', 'Unknown')}")
+        context_lines.append(f"Date: {msg.get('date', '')}")
+        body = msg.get("body", "")[:1000]
+        context_lines.append(f"Body: {body}")
+        context_lines.append("---")
+
+    context = "\n".join(context_lines)
+
+    prompt = f"""Summarize this email thread in 2-3 sentences. Focus on:
+- What is being discussed/requested
+- Current status (waiting on response? resolved? action needed?)
+- Key people involved
+
+THREAD:
+{context}
+
+Respond with just the summary, no preamble."""
+
+    result = subprocess.run(
+        [
+            "claude",
+            "--print",
+            "--model",
+            model,
+            "-p",
+            prompt,
+            "--dangerously-skip-permissions",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    if result.returncode != 0:
+        return f"Summary failed: {result.stderr}"
+
+    return result.stdout.strip()
