@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from .config import RULES_PATH
 from .contacts import format_contacts_for_prompt
+from .patterns import detect_urgency, should_skip_triage
 from .services import InboxItem, get_unified_inbox
 
 
@@ -93,6 +94,42 @@ def _parse_response(output: str, items: list[InboxItem]) -> list[TriageProposal]
     return proposals
 
 
+def _apply_patterns(items: list[InboxItem]) -> tuple[list[TriageProposal], list[InboxItem]]:
+    pattern_proposals = []
+    remaining = []
+
+    for item in items:
+        if item.source != "email":
+            remaining.append(item)
+            continue
+
+        match = should_skip_triage(item.sender, "", item.preview)
+        if match:
+            urgency, urgency_reason = detect_urgency("", item.preview)
+            if urgency >= 0.6:
+                pattern_proposals.append(
+                    TriageProposal(
+                        item=item,
+                        action="flag",
+                        reasoning=f"[auto] {match.reason}, but {urgency_reason}",
+                        confidence=urgency,
+                    )
+                )
+            else:
+                pattern_proposals.append(
+                    TriageProposal(
+                        item=item,
+                        action=match.action,
+                        reasoning=f"[auto] {match.reason}",
+                        confidence=match.confidence,
+                    )
+                )
+        else:
+            remaining.append(item)
+
+    return pattern_proposals, remaining
+
+
 def triage_inbox(
     limit: int = 20,
     model: str = "claude-sonnet-4-20250514",
@@ -101,8 +138,13 @@ def triage_inbox(
     if not items:
         return []
 
+    pattern_proposals, remaining = _apply_patterns(items)
+
+    if not remaining:
+        return pattern_proposals
+
     rules = _load_rules()
-    prompt = _build_prompt(items, rules)
+    prompt = _build_prompt(remaining, rules)
 
     result = subprocess.run(
         [
@@ -120,9 +162,16 @@ def triage_inbox(
     )
 
     if result.returncode != 0:
-        return []
+        return pattern_proposals
 
-    return _parse_response(result.stdout, items)
+    claude_proposals = _parse_response(result.stdout, remaining)
+
+    for p in claude_proposals:
+        urgency, urgency_reason = detect_urgency("", p.item.preview)
+        if urgency >= 0.6 and p.action not in ("flag", "delete"):
+            p.reasoning += f" [urgent: {urgency_reason}]"
+
+    return pattern_proposals + claude_proposals
 
 
 def create_proposals_from_triage(
