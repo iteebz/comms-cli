@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from . import accounts as accts_module
 from . import drafts, policy, proposals
 from .adapters.email import gmail
+from .adapters.messaging import signal
 
 
 @dataclass(frozen=True)
@@ -163,12 +164,15 @@ def execute_approved_proposals() -> list[ProposalExecution]:
         email = proposal.get("email")
 
         try:
-            if entity_type != "thread":
+            if entity_type == "thread":
+                if not email:
+                    account = _resolve_email_account(None)
+                    email = account["email"]
+                thread_action(action, entity_id, email)
+            elif entity_type == "signal_message":
+                _execute_signal_action(action, entity_id)
+            else:
                 raise ValueError(f"Unknown entity type: {entity_type}")
-            if not email:
-                account = _resolve_email_account(None)
-                email = account["email"]
-            thread_action(action, entity_id, email)
             proposals.mark_executed(proposal["id"])
             results.append(
                 ProposalExecution(
@@ -204,3 +208,10 @@ def _thread_action_map():
         "unarchive": gmail.unarchive_thread,
         "undelete": gmail.undelete_thread,
     }
+
+
+def _execute_signal_action(action: str, message_id: str) -> None:
+    if action in ("mark_read", "ignore"):
+        signal.mark_read(message_id)
+    else:
+        raise ValueError(f"Unknown signal action: {action}")

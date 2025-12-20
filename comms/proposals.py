@@ -3,10 +3,12 @@ import uuid
 from . import accounts as accts_module
 from . import audit
 from .adapters.email import gmail
+from .adapters.messaging import signal
 from .db import get_db, now_iso
 
 VALID_THREAD_ACTIONS = {"archive", "delete", "flag", "unflag", "unarchive", "undelete"}
 VALID_DRAFT_ACTIONS = {"approve", "send", "delete"}
+VALID_SIGNAL_ACTIONS = {"mark_read", "ignore"}
 
 
 def _validate_entity(entity_type: str, entity_id: str, email: str | None) -> tuple[bool, str]:
@@ -33,6 +35,12 @@ def _validate_entity(entity_type: str, entity_id: str, email: str | None) -> tup
             return False, f"Draft {entity_id} not found"
         return True, ""
 
+    elif entity_type == "signal_message":
+        msg = signal.get_message(entity_id)
+        if not msg:
+            return False, f"Signal message {entity_id} not found"
+        return True, ""
+
     else:
         return False, f"Unknown entity_type: {entity_type}"
 
@@ -51,6 +59,14 @@ def _validate_action(entity_type: str, proposed_action: str) -> tuple[bool, str]
             return (
                 False,
                 f"Invalid action '{proposed_action}' for draft. Valid: {VALID_DRAFT_ACTIONS}",
+            )
+        return True, ""
+
+    if entity_type == "signal_message":
+        if proposed_action not in VALID_SIGNAL_ACTIONS:
+            return (
+                False,
+                f"Invalid action '{proposed_action}' for signal_message. Valid: {VALID_SIGNAL_ACTIONS}",
             )
         return True, ""
 
