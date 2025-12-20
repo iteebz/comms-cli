@@ -270,3 +270,60 @@ def triage(
         results = services.execute_approved_proposals()
         executed = sum(1 for r in results if r.success)
         typer.echo(f"Executed: {executed}/{len(results)}")
+
+
+@app.command()
+def clear(
+    limit: int = typer.Option(50, "--limit", "-n", help="Max items to process"),
+    confidence: float = typer.Option(0.8, "--confidence", "-c", help="Auto-approve threshold"),
+    dry_run: bool = typer.Option(False, "--dry-run", "-d", help="Show what would happen"),
+):
+    """One-command inbox clear: triage → approve → execute"""
+    from .. import proposals as proposals_module
+    from .. import triage as triage_module
+
+    typer.echo("Scanning inbox...")
+    triage_proposals = triage_module.triage_inbox(limit=limit)
+
+    if not triage_proposals:
+        typer.echo("Inbox clear — nothing to triage")
+        return
+
+    auto_items = [
+        p for p in triage_proposals if p.confidence >= confidence and p.action != "ignore"
+    ]
+    review_items = [
+        p for p in triage_proposals if p.confidence < confidence or p.action == "ignore"
+    ]
+
+    typer.echo(f"\nAuto ({len(auto_items)}) | Review ({len(review_items)})\n")
+
+    for p in auto_items:
+        source = "📧" if p.item.source == "email" else "💬"
+        typer.echo(f"  {source} {p.action:8} {p.item.sender[:25]:25} {p.reasoning[:30]}")
+
+    if review_items:
+        typer.echo("\nNeeds review:")
+        for p in review_items:
+            source = "📧" if p.item.source == "email" else "💬"
+            typer.echo(
+                f"  {source} [{p.confidence:.0%}] {p.item.sender[:25]:25} {p.item.preview[:30]}"
+            )
+
+    if dry_run:
+        typer.echo(f"\nDry run: would auto-execute {len(auto_items)} items")
+        return
+
+    created = triage_module.create_proposals_from_triage(
+        auto_items, min_confidence=0.0, dry_run=False
+    )
+
+    for pid, _ in created:
+        proposals_module.approve_proposal(pid)
+
+    results = services.execute_approved_proposals()
+    executed = sum(1 for r in results if r.success)
+
+    typer.echo(f"\nExecuted: {executed}/{len(results)}")
+    if review_items:
+        typer.echo(f"Run `comms review` for {len(review_items)} items needing attention")

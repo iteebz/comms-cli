@@ -76,7 +76,9 @@ COMMAND_MAP = {
     "inbox": "comms inbox -n 5",
     "status": "comms status",
     "triage": "comms triage --dry-run -n 10",
+    "clear": "comms clear --dry-run",
     "stats": "comms stats",
+    "senders": "comms senders -n 10",
     "threads": "comms threads -l inbox",
     "accounts": "comms accounts",
     "review": "comms review",
@@ -96,12 +98,14 @@ def parse_natural_language(text: str) -> Command | None:
 AVAILABLE COMMANDS:
 - inbox: show unified inbox
 - status: show system status
-- triage: AI triage inbox
+- triage: AI triage inbox (preview)
+- clear: auto-clear inbox (preview)
 - threads: list email threads
 - accounts: list accounts
 - review: show pending proposals
 - resolve: execute approved proposals
 - drafts: show pending drafts
+- senders: show sender statistics
 - draft <thread_id>: generate reply draft for thread
 - approve <draft_id>: approve a draft
 - send <draft_id>: send approved draft
