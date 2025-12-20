@@ -699,6 +699,49 @@ def signal_status():
         typer.echo(f"{phone}: {status}")
 
 
+@app.command()
+def daemon_start(
+    interval: int = typer.Option(5, "--interval", "-i", help="Polling interval in seconds"),
+    foreground: bool = typer.Option(False, "--foreground", "-f", help="Run in foreground"),
+):
+    """Start Signal daemon (background polling)"""
+    from . import daemon
+
+    success, msg = daemon.start(interval=interval, foreground=foreground)
+    typer.echo(msg)
+    if not success:
+        raise typer.Exit(1)
+
+
+@app.command()
+def daemon_stop():
+    """Stop Signal daemon"""
+    from . import daemon
+
+    success, msg = daemon.stop()
+    typer.echo(msg)
+    if not success:
+        raise typer.Exit(1)
+
+
+@app.command()
+def daemon_status():
+    """Show daemon status"""
+    from . import daemon
+
+    s = daemon.status()
+    if s["running"]:
+        typer.echo(f"Running (PID {s['pid']})")
+        typer.echo(f"Accounts: {', '.join(s['accounts'])}")
+    else:
+        typer.echo("Not running")
+
+    if s.get("last_log"):
+        typer.echo("\nRecent log:")
+        for line in s["last_log"]:
+            typer.echo(f"  {line}")
+
+
 def main():
     db.init()
     app()
