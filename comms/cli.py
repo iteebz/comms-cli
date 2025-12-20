@@ -50,6 +50,21 @@ def _dashboard(ctx: typer.Context):
 
 
 @app.command()
+def inbox(limit: int = typer.Option(20, "--limit", "-n")):
+    """Unified inbox (email + signal, sorted by time)"""
+    items = services.get_unified_inbox(limit=limit)
+    if not items:
+        typer.echo("Inbox empty")
+        return
+
+    for item in items:
+        ts = datetime.fromtimestamp(item.timestamp / 1000).strftime("%m-%d %H:%M")
+        unread = "●" if item.unread else " "
+        source = "📧" if item.source == "email" else "💬"
+        typer.echo(f"{unread} {source} [{ts}] {item.sender[:20]:20} {item.preview}")
+
+
+@app.command()
 def init():
     """Initialize comms database and config"""
     db.init()

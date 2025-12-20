@@ -122,6 +122,58 @@ def list_threads(label: str) -> list[dict]:
     return results
 
 
+@dataclass
+class InboxItem:
+    source: str
+    source_id: str
+    sender: str
+    preview: str
+    timestamp: int
+    unread: bool
+    item_id: str
+
+
+def get_unified_inbox(limit: int = 20) -> list[InboxItem]:
+    items: list[InboxItem] = []
+
+    email_accounts = accts_module.list_accounts("email")
+    for account in email_accounts:
+        if account["provider"] == "gmail":
+            threads = gmail.list_threads(account["email"], label="inbox", max_results=limit)
+            for t in threads:
+                items.append(
+                    InboxItem(
+                        source="email",
+                        source_id=account["email"],
+                        sender=t.get("from", "Unknown"),
+                        preview=t.get("snippet", "")[:60],
+                        timestamp=t.get("timestamp", 0),
+                        unread="UNREAD" in t.get("labels", []),
+                        item_id=t["id"],
+                    )
+                )
+
+    signal_accounts = accts_module.list_accounts("messaging")
+    for account in signal_accounts:
+        if account["provider"] == "signal":
+            msgs = signal.get_messages(phone=account["email"], limit=limit, unread_only=False)
+            for m in msgs:
+                items.append(
+                    InboxItem(
+                        source="signal",
+                        source_id=account["email"],
+                        sender=m.get("sender_name") or m.get("sender_phone", "Unknown"),
+                        preview=m.get("body", "")[:60],
+                        timestamp=m.get("timestamp", 0),
+                        unread=m.get("read_at") is None,
+                        item_id=m.get("id", ""),
+                    )
+                )
+
+    items.sort(key=lambda x: x.timestamp, reverse=True)
+    return items[:limit]
+
+
 def fetch_thread(thread_id: str, email: str | None) -> list[dict]:
     account = _require_gmail_account(email)
     messages = gmail.fetch_thread_messages(thread_id, account["email"])
