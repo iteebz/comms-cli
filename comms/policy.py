@@ -30,7 +30,7 @@ def check_daily_send_limit() -> tuple[bool, str]:
 
     with get_db() as conn:
         count = conn.execute(
-            "SELECT COUNT(*) FROM drafts WHERE sent_at >= ?", (today_start,)
+            "SELECT COUNT(*) FROM drafts WHERE sent_at >= ?", (today_start.isoformat(),)
         ).fetchone()[0]
 
     if count >= max_daily:

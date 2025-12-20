@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from . import audit
-from .db import get_db
+from .db import get_db, now_iso
 from .models import Draft
 
 
@@ -51,6 +51,20 @@ def create_draft(
     return draft_id
 
 
+def resolve_draft_id(draft_id_prefix: str) -> str | None:
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id FROM drafts WHERE id LIKE ? ORDER BY created_at DESC",
+            (f"{draft_id_prefix}%",),
+        ).fetchall()
+
+    if len(rows) == 0:
+        return None
+    if len(rows) == 1:
+        return rows[0]["id"]
+    return None
+
+
 def get_draft(draft_id: str) -> Draft | None:
     with get_db() as conn:
         row = conn.execute("SELECT * FROM drafts WHERE id = ?", (draft_id,)).fetchone()
@@ -80,14 +94,14 @@ def get_draft(draft_id: str) -> Draft | None:
 
 def approve_draft(draft_id: str) -> None:
     with get_db() as conn:
-        conn.execute("UPDATE drafts SET approved_at = ? WHERE id = ?", (datetime.now(), draft_id))
+        conn.execute("UPDATE drafts SET approved_at = ? WHERE id = ?", (now_iso(), draft_id))
 
     audit.log("approve", "draft", draft_id)
 
 
 def mark_sent(draft_id: str) -> None:
     with get_db() as conn:
-        conn.execute("UPDATE drafts SET sent_at = ? WHERE id = ?", (datetime.now(), draft_id))
+        conn.execute("UPDATE drafts SET sent_at = ? WHERE id = ?", (now_iso(), draft_id))
 
     audit.log("send", "draft", draft_id)
 

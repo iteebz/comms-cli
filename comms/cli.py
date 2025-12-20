@@ -15,6 +15,32 @@ app = typer.Typer(
 )
 
 
+THREAD_ACTIONS = {
+    "archive": gmail.archive_thread,
+    "delete": gmail.delete_thread,
+    "flag": gmail.flag_thread,
+    "unflag": gmail.unflag_thread,
+    "unarchive": gmail.unarchive_thread,
+    "undelete": gmail.undelete_thread,
+}
+
+
+def _resolve_email_account(email: str | None) -> dict:
+    account, error = accts_module.select_email_account(email)
+    if account:
+        return account
+    typer.echo(error or "No email account found")
+    raise typer.Exit(1)
+
+
+def _require_gmail_account(email: str | None) -> dict:
+    account = _resolve_email_account(email)
+    if account["provider"] != "gmail":
+        typer.echo(f"Provider {account['provider']} not supported for this command")
+        raise typer.Exit(1)
+    return account
+
+
 @app.callback(invoke_without_command=True)
 def _dashboard(ctx: typer.Context):
     """Show dashboard"""
@@ -133,23 +159,8 @@ def compose(
         typer.echo("Error: --body required")
         raise typer.Exit(1)
 
-    if not email:
-        accounts = accts_module.list_accounts("email")
-        if len(accounts) == 1:
-            email = accounts[0]["email"]
-        else:
-            typer.echo("Multiple accounts found. Specify --email")
-            raise typer.Exit(1)
-
-    account = None
-    for acc in accts_module.list_accounts("email"):
-        if acc["email"] == email:
-            account = acc
-            break
-
-    if not account:
-        typer.echo(f"Account not found: {email}")
-        raise typer.Exit(1)
+    account = _resolve_email_account(email)
+    email = account["email"]
 
     draft_id = drafts.create_draft(
         to_addr=to,
@@ -169,24 +180,10 @@ def compose(
     typer.echo(f"\nRun `comms approve {draft_id[:8]}` to approve for sending")
 
 
-def _resolve_draft_id(draft_id_prefix: str) -> str | None:
-    with db.get_db() as conn:
-        rows = conn.execute(
-            "SELECT id FROM drafts WHERE id LIKE ? ORDER BY created_at DESC",
-            (f"{draft_id_prefix}%",),
-        ).fetchall()
-
-        if len(rows) == 0:
-            return None
-        if len(rows) == 1:
-            return rows[0]["id"]
-        return None
-
-
 @app.command()
 def approve_draft(draft_id: str):
     """Approve draft for sending"""
-    full_id = _resolve_draft_id(draft_id) or draft_id
+    full_id = drafts.resolve_draft_id(draft_id) or draft_id
     d = drafts.get_draft(full_id)
     if not d:
         typer.echo(f"Draft {draft_id} not found")
@@ -217,28 +214,13 @@ def reply(
         typer.echo("Error: --body required")
         raise typer.Exit(1)
 
-    if not email:
-        accounts = accts_module.list_accounts("email")
-        if len(accounts) == 1:
-            email = accounts[0]["email"]
-        else:
-            typer.echo("Multiple accounts found. Specify --email")
-            raise typer.Exit(1)
+    account = _require_gmail_account(email)
+    email = account["email"]
 
     messages = gmail.fetch_thread_messages(thread_id, email)
 
     if not messages:
         typer.echo(f"Thread not found: {thread_id}")
-        raise typer.Exit(1)
-
-    account = None
-    for acc in accts_module.list_accounts("email"):
-        if acc["email"] == email:
-            account = acc
-            break
-
-    if not account:
-        typer.echo(f"Account not found: {email}")
         raise typer.Exit(1)
 
     original_subject = messages[0]["subject"]
@@ -266,7 +248,7 @@ def reply(
 @app.command()
 def send(draft_id: str):
     """Send approved draft"""
-    full_id = _resolve_draft_id(draft_id) or draft_id
+    full_id = drafts.resolve_draft_id(draft_id) or draft_id
     d = drafts.get_draft(full_id)
     if not d:
         typer.echo(f"Draft {draft_id} not found")
@@ -614,13 +596,8 @@ def _resolve_thread_id(prefix: str, email: str) -> str | None:
 @app.command()
 def thread(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Fetch and display full thread"""
-    if not email:
-        accounts = accts_module.list_accounts("email")
-        if len(accounts) == 1:
-            email = accounts[0]["email"]
-        else:
-            typer.echo("Multiple accounts found. Specify --email")
-            raise typer.Exit(1)
+    account = _require_gmail_account(email)
+    email = account["email"]
 
     full_id = _resolve_thread_id(thread_id, email) or thread_id
     messages = gmail.fetch_thread_messages(full_id, email)
@@ -642,13 +619,8 @@ def thread(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
 @app.command()
 def archive(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Archive thread (remove from inbox)"""
-    if not email:
-        accounts = accts_module.list_accounts("email")
-        if len(accounts) == 1:
-            email = accounts[0]["email"]
-        else:
-            typer.echo("Multiple accounts found. Specify --email")
-            raise typer.Exit(1)
+    account = _require_gmail_account(email)
+    email = account["email"]
 
     success = gmail.archive_thread(thread_id, email)
 
@@ -663,13 +635,8 @@ def archive(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
 @app.command()
 def delete(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Delete thread (move to trash)"""
-    if not email:
-        accounts = accts_module.list_accounts("email")
-        if len(accounts) == 1:
-            email = accounts[0]["email"]
-        else:
-            typer.echo("Multiple accounts found. Specify --email")
-            raise typer.Exit(1)
+    account = _require_gmail_account(email)
+    email = account["email"]
 
     success = gmail.delete_thread(thread_id, email)
 
@@ -707,13 +674,8 @@ def undelete(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
 
 def _thread_action(thread_id: str, action_name: str, action_fn, email: str = None):
     """Helper to execute thread actions with audit logging"""
-    if not email:
-        accounts = accts_module.list_accounts("email")
-        if len(accounts) == 1:
-            email = accounts[0]["email"]
-        else:
-            typer.echo("Multiple accounts found. Specify --email")
-            raise typer.Exit(1)
+    account = _require_gmail_account(email)
+    email = account["email"]
 
     success = action_fn(thread_id, email)
 
@@ -835,25 +797,16 @@ def resolve():
         try:
             if entity_type == "thread":
                 if not email:
-                    account = accts_module.list_accounts("email")[0]
+                    account = _resolve_email_account(None)
                     email = account["email"]
 
-                if action == "archive":
-                    success = gmail.archive_thread(entity_id, email)
-                elif action == "delete":
-                    success = gmail.delete_thread(entity_id, email)
-                elif action == "flag":
-                    success = gmail.flag_thread(entity_id, email)
-                elif action == "unflag":
-                    success = gmail.unflag_thread(entity_id, email)
-                elif action == "unarchive":
-                    success = gmail.unarchive_thread(entity_id, email)
-                elif action == "undelete":
-                    success = gmail.undelete_thread(entity_id, email)
-                else:
+                action_fn = THREAD_ACTIONS.get(action)
+                if not action_fn:
                     typer.echo(f"  Unknown action: {action}")
                     failed_count += 1
                     continue
+
+                success = action_fn(entity_id, email)
 
                 if success:
                     proposals.mark_executed(p["id"])

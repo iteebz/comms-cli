@@ -9,6 +9,10 @@ from . import config
 MIGRATIONS_TABLE = "_migrations"
 
 
+def now_iso() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
 @contextmanager
 def get_db(db_path: Path | None = None):
     db_path = db_path if db_path else config.DB_PATH

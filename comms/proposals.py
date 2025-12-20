@@ -1,23 +1,19 @@
 import uuid
-from datetime import datetime
 
 from . import accounts as accts_module
 from . import audit
 from .adapters.email import gmail
-from .db import get_db
+from .db import get_db, now_iso
 
 VALID_THREAD_ACTIONS = {"archive", "delete", "flag", "unflag", "unarchive", "undelete"}
 VALID_DRAFT_ACTIONS = {"approve", "send", "delete"}
 
 
-def _validate_entity(entity_type: str, entity_id: str) -> tuple[bool, str]:
+def _validate_entity(entity_type: str, entity_id: str, email: str | None) -> tuple[bool, str]:
     if entity_type == "thread":
-        accounts = accts_module.list_accounts("email")
-        if not accounts:
-            return False, "No email accounts configured"
-
-        account = accounts[0]
-        email = account["email"]
+        account, error = accts_module.select_email_account(email)
+        if not account:
+            return False, error or "No email account found"
 
         try:
             if account["provider"] == "gmail":
@@ -74,7 +70,7 @@ def create_proposal(
         if not valid_action:
             return None, msg
 
-        valid_entity, msg = _validate_entity(entity_type, entity_id)
+        valid_entity, msg = _validate_entity(entity_type, entity_id, email)
         if not valid_entity:
             return None, msg
 
@@ -93,7 +89,7 @@ def create_proposal(
                 proposed_action,
                 agent_reasoning,
                 email,
-                datetime.now(),
+                now_iso(),
                 "pending",
             ),
         )
@@ -152,7 +148,7 @@ def approve_proposal(proposal_id: str, user_reasoning: str | None = None) -> boo
             SET status = 'approved', approved_at = ?, approved_by = 'user', user_reasoning = ?
             WHERE id = ?
             """,
-            (datetime.now(), user_reasoning, full_id),
+            (now_iso(), user_reasoning, full_id),
         )
 
     audit.log_decision(
@@ -187,7 +183,7 @@ def reject_proposal(
             SET status = 'rejected', rejected_at = ?, user_reasoning = ?, correction = ?
             WHERE id = ?
             """,
-            (datetime.now(), user_reasoning, correction, full_id),
+            (now_iso(), user_reasoning, correction, full_id),
         )
 
     decision_type = "rejected_with_correction" if correction else "rejected"
@@ -214,7 +210,7 @@ def mark_executed(proposal_id: str) -> bool:
     with get_db() as conn:
         conn.execute(
             "UPDATE proposals SET status = 'executed', executed_at = ? WHERE id = ?",
-            (datetime.now(), proposal_id),
+            (now_iso(), proposal_id),
         )
 
     proposal = get_proposal(proposal_id)

@@ -59,6 +59,23 @@ def list_accounts(service_type: str | None = None):
         return [dict(row) for row in rows]
 
 
+def select_email_account(email: str | None) -> tuple[dict | None, str | None]:
+    accounts = list_accounts("email")
+    if not accounts:
+        return None, "No email accounts linked. Run: comms link gmail"
+
+    if email is None:
+        if len(accounts) == 1:
+            return accounts[0], None
+        return None, "Multiple accounts found. Specify --email"
+
+    for account in accounts:
+        if account["email"] == email:
+            return account, None
+
+    return None, f"Account not found: {email}"
+
+
 def remove_account(account_id: str) -> bool:
     with get_db() as conn:
         cursor = conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))

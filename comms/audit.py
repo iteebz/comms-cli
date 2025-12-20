@@ -1,7 +1,6 @@
 import json
-from datetime import datetime
 
-from .db import get_db
+from .db import get_db, now_iso
 
 
 def log(
@@ -26,7 +25,7 @@ def log(
                 entity_type,
                 entity_id,
                 metadata_json,
-                datetime.now(),
+                now_iso(),
                 proposed_action,
                 user_decision,
                 reasoning,
