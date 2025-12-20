@@ -11,6 +11,7 @@ from .contacts import format_contacts_for_prompt
 from .patterns import detect_urgency, should_skip_triage
 from .sender_stats import format_sender_context_for_prompt
 from .services import InboxItem, get_unified_inbox
+from .snooze import get_due_snoozes, is_snoozed, mark_resurfaced
 
 
 @dataclass
@@ -145,6 +146,20 @@ def triage_inbox(
     model: str = "claude-sonnet-4-20250514",
 ) -> list[TriageProposal]:
     items = get_unified_inbox(limit=limit)
+    if not items:
+        return []
+
+    due_snoozes = get_due_snoozes()
+    for snooze in due_snoozes:
+        mark_resurfaced(snooze["id"])
+
+    entity_type_map = {"email": "thread", "signal": "signal_message"}
+    items = [
+        item
+        for item in items
+        if not is_snoozed(entity_type_map.get(item.source, "thread"), item.item_id)
+    ]
+
     if not items:
         return []
 

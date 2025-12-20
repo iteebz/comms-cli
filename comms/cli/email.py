@@ -59,6 +59,44 @@ def summarize(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
 
 
 @app.command()
+def snooze(
+    thread_id: str,
+    until: str = typer.Option(
+        "tomorrow", "--until", "-u", help="When to resurface: tomorrow, monday, 2d, 4h"
+    ),
+    email: str = typer.Option(None, "--email", "-e"),
+):
+    """Snooze thread until later"""
+    from .. import snooze as snooze_module
+
+    full_id = run_service(services.resolve_thread_id, thread_id, email) or thread_id
+    snooze_id, snooze_until = snooze_module.snooze_item(
+        entity_type="thread",
+        entity_id=full_id,
+        until=until,
+        source_id=email,
+    )
+    typer.echo(f"Snoozed until {snooze_until.strftime('%Y-%m-%d %H:%M')}")
+
+
+@app.command()
+def snoozed():
+    """List snoozed threads"""
+    from .. import snooze as snooze_module
+
+    items = snooze_module.get_snoozed_items()
+    if not items:
+        typer.echo("No snoozed items")
+        return
+
+    for item in items:
+        until = item["snooze_until"][:16]
+        typer.echo(
+            f"  {item['id'][:8]} | {until} | {item['entity_id'][:8]} | {item.get('reason') or ''}"
+        )
+
+
+@app.command()
 def archive(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Archive thread (remove from inbox)"""
     run_service(services.thread_action, "archive", thread_id, email)
