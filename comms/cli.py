@@ -817,10 +817,14 @@ def daemon_stop():
 @app.command()
 def daemon_status():
     """Show daemon status"""
-    from . import daemon
+    from . import daemon, launchd
 
     s = daemon.status()
-    if s["running"]:
+    ld = launchd.status()
+
+    if ld["installed"]:
+        typer.echo(f"Launchd: {'running' if ld['running'] else 'installed but not running'}")
+    elif s["running"]:
         typer.echo(f"Running (PID {s['pid']})")
         typer.echo(f"Accounts: {', '.join(s['accounts'])}")
     else:
@@ -830,6 +834,30 @@ def daemon_status():
         typer.echo("\nRecent log:")
         for line in s["last_log"]:
             typer.echo(f"  {line}")
+
+
+@app.command()
+def daemon_install(
+    interval: int = typer.Option(5, "--interval", "-i", help="Polling interval"),
+):
+    """Install daemon as launchd service (auto-start on boot)"""
+    from . import launchd
+
+    success, msg = launchd.install(interval=interval)
+    typer.echo(msg)
+    if not success:
+        raise typer.Exit(1)
+
+
+@app.command()
+def daemon_uninstall():
+    """Uninstall daemon launchd service"""
+    from . import launchd
+
+    success, msg = launchd.uninstall()
+    typer.echo(msg)
+    if not success:
+        raise typer.Exit(1)
 
 
 def main():
