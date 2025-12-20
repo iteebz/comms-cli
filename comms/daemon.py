@@ -23,8 +23,13 @@ def _get_signal_phones() -> list[str]:
     return [a["email"] for a in accounts if a["provider"] == "signal"]
 
 
-def _poll_once(phones: list[str], timeout: int = 1, agent_mode: bool = True) -> int:
+def _poll_once(phones: list[str], timeout: int = 1) -> int:
     from . import agent
+    from .config import get_agent_config
+
+    agent_config = get_agent_config()
+    agent_enabled = agent_config.get("enabled", True)
+    use_nlp = agent_config.get("nlp", False)
 
     total = 0
     for phone in phones:
@@ -36,8 +41,8 @@ def _poll_once(phones: list[str], timeout: int = 1, agent_mode: bool = True) -> 
                     sender = m.get("from_name", m.get("sender_phone", "Unknown"))
                     _log(f"[{phone}] {sender}: {m['body'][:50]}")
 
-                    if agent_mode:
-                        response = agent.handle_incoming(phone, m)
+                    if agent_enabled:
+                        response = agent.handle_incoming(phone, m, use_nlp=use_nlp)
                         if response:
                             sender_phone = m.get("sender_phone", "")
                             if sender_phone:

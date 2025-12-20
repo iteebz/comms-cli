@@ -217,11 +217,11 @@ def process_message(
     return execute_command(cmd)
 
 
-def handle_incoming(phone: str, message: dict) -> str | None:
+def handle_incoming(phone: str, message: dict, use_nlp: bool = False) -> str | None:
     sender = message.get("sender_phone", "")
     body = message.get("body", "")
 
-    result = process_message(phone, sender, body)
+    result = process_message(phone, sender, body, use_nlp=use_nlp)
     if not result:
         return None
 

@@ -41,6 +41,27 @@ def agent_list():
 
 
 @app.command()
+def agent_config(
+    enable: bool = typer.Option(None, "--enable/--disable", help="Enable or disable agent"),
+    nlp: bool = typer.Option(None, "--nlp/--no-nlp", help="Enable natural language parsing"),
+):
+    """Configure agent settings"""
+    from ..config import get_agent_config, set_agent_config
+
+    config = get_agent_config()
+
+    if enable is not None:
+        config["enabled"] = enable
+    if nlp is not None:
+        config["nlp"] = nlp
+
+    set_agent_config(config)
+
+    typer.echo(f"Agent: {'enabled' if config.get('enabled', True) else 'disabled'}")
+    typer.echo(f"NLP: {'enabled' if config.get('nlp', False) else 'disabled'}")
+
+
+@app.command()
 def daemon_start(
     interval: int = typer.Option(5, "--interval", "-i", help="Polling interval in seconds"),
     foreground: bool = typer.Option(False, "--foreground", "-f", help="Run in foreground"),

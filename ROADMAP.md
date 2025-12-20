@@ -28,61 +28,75 @@ Attention scaffolding for ADHD brains. Not "AI email"—AI-mediated communicatio
 
 ## Stage 1 — Multi-Provider ✅
 
-**Done:**
 - Gmail adapter (3 accounts, full flow)
 - Signal adapter (send, receive, reply, storage)
 - Signal daemon mode (background polling)
 - Unified triage for email + Signal
-
-**Not done:**
-- Group message support
+- Launchd auto-start for daemon
 
 ---
 
-## Stage 2 — Learning Loop (current)
+## Stage 2 — Learning Loop ✅
 
-**Done:**
 - Correction tracking in proposals
 - `comms stats` shows accuracy + patterns
 - Confidence calculation per action
-
-**Next:**
-- Auto-approve high-confidence actions (>95%, 10+ samples)
-- Threshold config in policy
+- Auto-approve high-confidence actions (configurable threshold)
+- `comms auto-approve --enable --threshold 0.95`
 
 ---
 
-## Stage 3 — Draft Generation
+## Stage 3 — Draft Generation ✅
 
-- Claude drafts replies
-- Diff tracking: proposed vs final
-- Voice learning from edits
+- Claude drafts email replies: `comms draft-reply <thread-id>`
+- Claude drafts Signal replies: `comms signal-draft <contact>`
+- Headless Claude via subprocess
 
 ---
 
-## Stage 4 — Agent Bus
+## Stage 4 — Triage Automation ✅
+
+- `comms triage` — Claude scans inbox, bulk-proposes actions
+- Rules engine reads `~/.comms/rules.md`
+- Confidence thresholds for auto-create
+- Dry-run mode
+
+---
+
+## Stage 5 — Agent Bus ✅
 
 comms-cli as the communication layer for agents:
 
 ```bash
-# Agent notifies you
-comms signal-send +... -m "Build complete: ✅"
+# Commands via Signal
+!inbox              # show unified inbox
+!triage             # AI triage dry-run
+!status             # system status
+!archive <id>       # archive thread
+!help               # list commands
 
-# You command agent via Signal
-"check my emails" → agent triages
-"reply to john saying yes" → agent drafts + sends
+# NLP mode (optional)
+"check my email"    # → !inbox
+"show me status"    # → !status
 ```
 
-**Requires:**
-- Daemon mode (always listening) ✅
-- Command parsing from messages
-- Agent handoff protocol
+**Features:**
+- Daemon responds to Signal commands
+- Authorized senders whitelist
+- NLP mode via Claude Haiku
+- `comms agent-config --nlp` to enable
+
+---
+
+## Stage 6 — Provider Expansion (next)
+
+- Outlook adapter (Graph API)
+- Calendar integration (propose meeting times)
 
 ---
 
 ## Future
 
-- Outlook adapter (Graph API)
-- Calendar integration
 - Voice memos → transcribed drafts
-- Cross-provider unified inbox
+- Slack/Discord adapters
+- Cross-device sync

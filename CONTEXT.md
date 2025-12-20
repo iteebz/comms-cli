@@ -10,6 +10,7 @@ CLI tool for AI-mediated communication. Target user has ADHD—messages pile up 
 - 3 accounts linked, OAuth2, stateless inbox
 - Full send flow: compose → approve → send
 - Thread actions: archive, delete, flag, unflag, unarchive, undelete
+- Claude drafts replies: `comms draft-reply <thread-id>`
 
 **Signal:**
 - Linked as secondary device via signal-cli
@@ -17,29 +18,41 @@ CLI tool for AI-mediated communication. Target user has ADHD—messages pile up 
 - Daemon mode (background polling)
 - Local message storage (signal-cli consumes on receive)
 - Conversation inbox + history views
+- Claude drafts replies: `comms signal-draft <contact>`
+- Launchd auto-start: `comms daemon-install`
 
 **Triage:**
+- `comms triage` — Claude bulk-proposes actions for inbox
 - Unified proposal flow for email + Signal
 - propose → review → approve/reject → resolve
 - Correction tracking with pattern learning
 - `comms stats` shows accuracy + correction patterns
+- Auto-approve high-confidence actions
+
+**Agent Bus:**
+- Daemon responds to Signal commands
+- Explicit: `!inbox`, `!status`, `!triage`, `!help`
+- NLP mode: "check my email" → parsed via Claude Haiku
+- Authorized senders whitelist
+- `comms agent-config --nlp` to enable
 
 **Not done:**
 - Outlook adapter (stub exists)
 - Proton adapter (requires paid Bridge)
-- Draft generation
-- Auto-approve based on confidence
+- Calendar integration
 
 ## Architecture
 
 ```
 ~/.comms/
-  store.db      # SQLite: accounts, drafts, proposals, audit_log, signal_messages
-  config.yaml   # Policy settings
-  rules.md      # Triage rules (Claude reads before proposing)
+  store.db              # SQLite: accounts, drafts, proposals, audit_log, signal_messages
+  config.yaml           # Policy + agent settings
+  rules.md              # Triage rules (Claude reads before proposing)
+  authorized_senders.txt # Agent command whitelist
+  daemon.pid            # Daemon process ID
+  daemon.log            # Daemon activity log
 
-~/.comms_backups/{timestamp}/
-  store.db      # Auto-backup on init
+~/Library/LaunchAgents/com.comms-cli.daemon.plist  # Launchd auto-start
 ```
 
 **Stateless inbox:** No email cache. Gmail API is source of truth.
@@ -61,7 +74,9 @@ send → Gmail API → drafts (sent_at=NOW)
 
 **Triage:**
 ```
-propose → proposals (status=pending)
+comms triage           # Claude proposes actions
+    ↓
+proposals (status=pending)
     ↓
 review → human sees grouped by action
     ↓
@@ -70,15 +85,28 @@ approve/reject --correct → proposals (status=approved|rejected)
 resolve → execute all approved → proposals (status=executed)
 ```
 
-**Signal:**
+**Agent bus:**
 ```
-comms messages          # receive + store
-comms signal-inbox      # view conversations
-comms signal-history    # view thread with contact
-comms signal-send       # send message
-comms signal-reply      # reply to stored message
-comms daemon-start      # background polling
-comms daemon-stop
+Signal message received
+    ↓
+Is command? (!inbox, "check my email")
+    ↓
+Parse → Execute → Respond via Signal
+```
+
+## CLI structure
+
+```
+comms/cli/
+├── __init__.py   # app entry, dashboard callback
+├── accounts.py   # link, unlink, accounts
+├── daemon.py     # daemon-*, agent-*
+├── drafts.py     # compose, reply, send, draft-reply
+├── email.py      # threads, archive, delete
+├── helpers.py    # run_service, get_signal_phone
+├── proposals.py  # review, propose, approve, reject
+├── signal.py     # signal-*
+└── system.py     # init, inbox, triage, status, stats
 ```
 
 ## Adapter signatures
@@ -88,14 +116,16 @@ comms daemon-stop
 def list_threads(email: str, label: str, max_results: int) -> list[dict]
 def fetch_thread_messages(thread_id: str, email: str) -> list[dict]
 def archive_thread(thread_id: str, email: str) -> bool
-def delete_thread(thread_id: str, email: str) -> bool
 def send_message(account_id: str, email: str, draft: Draft) -> bool
 
 # Signal
 def receive(phone: str, timeout: int, store: bool) -> list[dict]
 def send(phone: str, recipient: str, message: str) -> tuple[bool, str]
 def get_messages(phone: str, sender: str, limit: int) -> list[dict]
-def get_conversations(phone: str) -> list[dict]
+
+# Claude (headless)
+def generate_reply(context: str, instructions: str) -> tuple[str, str]
+def generate_signal_reply(conversation: list[dict], instructions: str) -> tuple[str, str]
 ```
 
 ## Design principles
@@ -118,7 +148,8 @@ comms threads [--label inbox|unread|archive|trash|starred|sent]
 comms thread <id>
 comms compose <to> --subject "..." --body "..."
 comms reply <thread-id> --body "..."
-comms approve <draft-id>
+comms draft-reply <thread-id> [--instructions "..."]
+comms approve-draft <draft-id>
 comms send <draft-id>
 comms archive|delete|flag <thread-id>
 
@@ -129,13 +160,21 @@ comms signal-inbox       # conversations
 comms signal-history <phone>
 comms signal-send <phone> -m "..."
 comms signal-reply <msg-id> -m "..."
-comms signal-contacts
-comms signal-groups
-comms daemon-start       # background polling
+comms signal-draft <phone> [--instructions "..."]
+
+# Daemon + Agent
+comms daemon-start [--foreground]
 comms daemon-stop
 comms daemon-status
+comms daemon-install     # launchd auto-start
+comms daemon-uninstall
+comms agent-authorize <phone>
+comms agent-revoke <phone>
+comms agent-list
+comms agent-config [--enable|--disable] [--nlp|--no-nlp]
 
 # Triage
+comms triage [--dry-run] [--execute] [--confidence 0.7]
 comms propose <action> <entity_type> <entity_id> --agent "reasoning"
 comms review [--action delete|archive|flag]
 comms approve <proposal-id>
@@ -143,9 +182,12 @@ comms reject <proposal-id> --correct "action"
 comms resolve
 
 # System
+comms inbox              # unified inbox
 comms accounts
 comms backup
 comms rules
+comms status
+comms auto-approve [--enable|--disable] [--threshold 0.95]
 comms audit-log
 comms stats              # learning stats
 ```

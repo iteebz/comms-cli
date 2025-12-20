@@ -81,3 +81,17 @@ def get_policy():
 
 def set_policy(policy):
     _config.set("policy", policy)
+
+
+def get_agent_config():
+    return _config.get(
+        "agent",
+        {
+            "enabled": True,
+            "nlp": False,
+        },
+    )
+
+
+def set_agent_config(config):
+    _config.set("agent", config)
