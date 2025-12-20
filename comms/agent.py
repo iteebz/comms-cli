@@ -81,6 +81,9 @@ COMMAND_MAP = {
     "accounts": "comms accounts",
     "review": "comms review",
     "resolve": "comms resolve",
+    "drafts": "comms drafts",
+    "contacts": "comms contacts",
+    "rules": "comms rules",
     "help": None,
 }
 
@@ -98,6 +101,10 @@ AVAILABLE COMMANDS:
 - accounts: list accounts
 - review: show pending proposals
 - resolve: execute approved proposals
+- drafts: show pending drafts
+- draft <thread_id>: generate reply draft for thread
+- approve <draft_id>: approve a draft
+- send <draft_id>: send approved draft
 - archive <id>: archive thread
 - delete <id>: delete thread
 - ping: test connection
@@ -193,6 +200,33 @@ def execute_command(cmd: Command) -> CommandResult:
             success=success,
             message=output or f"Deleted {thread_id}",
             executed=f"delete {thread_id}",
+        )
+
+    if action == "draft" and cmd.args:
+        thread_id = cmd.args[0]
+        success, output = _run_comms_command(f"comms draft-reply {thread_id}")
+        return CommandResult(
+            success=success,
+            message=output,
+            executed=f"draft-reply {thread_id}",
+        )
+
+    if action == "approve" and cmd.args:
+        draft_id = cmd.args[0]
+        success, output = _run_comms_command(f"comms approve-draft {draft_id}")
+        return CommandResult(
+            success=success,
+            message=output or f"Approved {draft_id}",
+            executed=f"approve-draft {draft_id}",
+        )
+
+    if action == "send" and cmd.args:
+        draft_id = cmd.args[0]
+        success, output = _run_comms_command(f"comms send {draft_id}")
+        return CommandResult(
+            success=success,
+            message=output or f"Sent {draft_id}",
+            executed=f"send {draft_id}",
         )
 
     return CommandResult(success=False, message=f"Unknown command: {action}", executed=action)
