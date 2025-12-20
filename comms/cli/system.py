@@ -250,6 +250,15 @@ def audit_log(limit: int = 20):
 
 
 @app.command()
+def digest(days: int = typer.Option(7, "--days", "-d", help="Number of days to summarize")):
+    """Weekly activity digest"""
+    from .. import digest as digest_module
+
+    stats = digest_module.get_digest(days=days)
+    typer.echo(digest_module.format_digest(stats))
+
+
+@app.command()
 def triage(
     limit: int = typer.Option(20, "--limit", "-n", help="Number of items to triage"),
     confidence: float = typer.Option(0.7, "--confidence", "-c", help="Minimum confidence"),
