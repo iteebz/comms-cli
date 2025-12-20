@@ -1,8 +1,11 @@
+from datetime import datetime
+
 import typer
 
 from . import accounts as accts_module
 from . import audit, db, drafts, policy, proposals
 from .adapters.email import gmail, outlook, proton
+from .adapters.messaging import signal
 
 app = typer.Typer(
     name="comms",
@@ -315,9 +318,9 @@ def audit_log(limit: int = 20):
 
 @app.command()
 def link(
-    provider: str = typer.Argument(..., help="Provider: proton, gmail, outlook"),
-    email: str = typer.Argument(
-        None, help="Email (required for proton/outlook, auto-detected for gmail)"
+    provider: str = typer.Argument(..., help="Provider: gmail, outlook, proton, signal"),
+    identifier: str = typer.Argument(
+        None, help="Email or phone number (e.g., +1234567890 for Signal)"
     ),
     password: str = typer.Option(
         None, "--password", "-p", help="Password (Proton Bridge password)"
@@ -327,11 +330,41 @@ def link(
         None, "--client-secret", help="OAuth Client Secret (Outlook)"
     ),
 ):
-    """Link email account"""
-    if provider not in ["proton", "gmail", "outlook"]:
+    """Link email or messaging account"""
+    if provider not in ["proton", "gmail", "outlook", "signal"]:
         typer.echo(f"Unknown provider: {provider}")
         raise typer.Exit(1)
 
+    if provider == "signal":
+        existing = signal.list_accounts()
+        if existing:
+            typer.echo(f"Signal accounts already linked: {existing}")
+            for phone in existing:
+                if not any(a["email"] == phone for a in accts_module.list_accounts("messaging")):
+                    account_id = accts_module.add_messaging_account("signal", phone)
+                    typer.echo(f"Added existing account: {phone} ({account_id[:8]})")
+            return
+
+        typer.echo("Linking Signal as secondary device...")
+        typer.echo("Open Signal on your phone -> Settings -> Linked Devices -> Link New Device")
+        typer.echo("Then scan the QR code that will appear.")
+        success, msg = signal.link("comms-cli")
+        if not success:
+            typer.echo(f"Link failed: {msg}")
+            raise typer.Exit(1)
+
+        accounts = signal.list_accounts()
+        if not accounts:
+            typer.echo("No accounts found after linking")
+            raise typer.Exit(1)
+
+        phone = accounts[0]
+        account_id = accts_module.add_messaging_account("signal", phone)
+        typer.echo(f"Linked Signal: {phone}")
+        typer.echo(f"Account ID: {account_id}")
+        return
+
+    email = identifier
     if provider == "gmail":
         try:
             email = gmail.init_oauth()
@@ -382,6 +415,129 @@ def link(
 
     typer.echo(f"Linked {provider}: {email}")
     typer.echo(f"Account ID: {account_id}")
+
+
+def _get_signal_phone(phone: str | None) -> str:
+    if phone:
+        return phone
+    accounts = accts_module.list_accounts("messaging")
+    signal_accounts = [a for a in accounts if a["provider"] == "signal"]
+    if not signal_accounts:
+        typer.echo("No Signal accounts linked. Run: comms link signal")
+        raise typer.Exit(1)
+    return signal_accounts[0]["email"]
+
+
+@app.command()
+def messages(
+    phone: str = typer.Option(None, "--phone", "-p", help="Signal phone number"),
+    timeout: int = typer.Option(5, "--timeout", "-t", help="Receive timeout in seconds"),
+):
+    """Receive new Signal messages and store them"""
+    phone = _get_signal_phone(phone)
+
+    typer.echo(f"Receiving messages for {phone}...")
+    msgs = signal.receive(phone, timeout=timeout)
+
+    if msgs:
+        typer.echo(f"Received {len(msgs)} new message(s)")
+        for msg in msgs:
+            sender = msg.get("from_name") or msg.get("from", "Unknown")
+            body = msg.get("body", "")
+            typer.echo(f"  {sender}: {body}")
+    else:
+        typer.echo("No new messages")
+
+
+@app.command()
+def signal_inbox(
+    phone: str = typer.Option(None, "--phone", "-p"),
+):
+    """Show Signal conversations"""
+    phone = _get_signal_phone(phone)
+
+    convos = signal.get_conversations(phone)
+    if not convos:
+        typer.echo("No conversations yet. Run: comms messages")
+        return
+
+    for c in convos:
+        name = c["sender_name"] or c["sender_phone"]
+        unread = c["unread_count"]
+        count = c["message_count"]
+        unread_str = f" ({unread} unread)" if unread else ""
+        typer.echo(f"{c['sender_phone']:16} | {name:20} | {count} msgs{unread_str}")
+
+
+@app.command()
+def signal_history(
+    contact: str = typer.Argument(..., help="Phone number to view history with"),
+    phone: str = typer.Option(None, "--phone", "-p"),
+    limit: int = typer.Option(20, "--limit", "-n"),
+):
+    """Show message history with a contact"""
+    phone = _get_signal_phone(phone)
+
+    msgs = signal.get_messages(phone=phone, sender=contact, limit=limit)
+    if not msgs:
+        typer.echo(f"No messages from {contact}")
+        return
+
+    msgs.reverse()
+    for msg in msgs:
+        sender = msg["sender_name"] or msg["sender_phone"]
+        ts = datetime.fromtimestamp(msg["timestamp"] / 1000).strftime("%m-%d %H:%M")
+        typer.echo(f"[{ts}] {sender}: {msg['body']}")
+
+
+@app.command()
+def signal_send(
+    recipient: str = typer.Argument(..., help="Phone number or group ID"),
+    message: str = typer.Option(..., "--message", "-m", help="Message to send"),
+    phone: str = typer.Option(None, "--phone", "-p"),
+    group: bool = typer.Option(False, "--group", "-g", help="Send to group"),
+):
+    """Send Signal message"""
+    phone = _get_signal_phone(phone)
+
+    if group:
+        success, msg = signal.send_group(phone, recipient, message)
+    else:
+        success, msg = signal.send(phone, recipient, message)
+
+    if success:
+        typer.echo(f"Sent to {recipient}")
+    else:
+        typer.echo(f"Failed: {msg}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def signal_contacts(phone: str = typer.Option(None, "--phone", "-p")):
+    """List Signal contacts"""
+    phone = _get_signal_phone(phone)
+    contacts = signal.list_contacts(phone)
+    if not contacts:
+        typer.echo("No contacts")
+        return
+
+    for c in contacts:
+        name = c.get("name", "")
+        number = c.get("number", "")
+        typer.echo(f"{number:20} {name}")
+
+
+@app.command()
+def signal_groups(phone: str = typer.Option(None, "--phone", "-p")):
+    """List Signal groups"""
+    phone = _get_signal_phone(phone)
+    groups = signal.list_groups(phone)
+    if not groups:
+        typer.echo("No groups")
+        return
+
+    for g in groups:
+        typer.echo(f"{g.get('id', '')[:16]} | {g.get('name', '')}")
 
 
 @app.command()
@@ -715,6 +871,21 @@ def resolve():
             failed_count += 1
 
     typer.echo(f"\nExecuted: {executed_count}, Failed: {failed_count}")
+
+
+@app.command()
+def signal_status():
+    """Check Signal connection status"""
+    accounts = signal.list_accounts()
+    if not accounts:
+        typer.echo("No Signal accounts registered with signal-cli")
+        typer.echo("Run: comms link signal")
+        return
+
+    for phone in accounts:
+        success, msg = signal.test_connection(phone)
+        status = "OK" if success else f"FAIL: {msg}"
+        typer.echo(f"{phone}: {status}")
 
 
 def main():

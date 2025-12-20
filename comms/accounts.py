@@ -21,6 +21,25 @@ def add_email_account(provider: str, email: str) -> str:
     return account_id
 
 
+def add_messaging_account(provider: str, identifier: str) -> str:
+    account_id = str(uuid.uuid4())
+
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO accounts (id, service_type, provider, email, enabled)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (account_id, "messaging", provider, identifier, 1),
+        )
+
+    config_add_account(
+        "messaging", {"provider": provider, "identifier": identifier, "id": account_id}
+    )
+
+    return account_id
+
+
 def get_account_by_id(account_id: str):
     with get_db() as conn:
         row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
