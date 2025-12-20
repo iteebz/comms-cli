@@ -951,6 +951,50 @@ def daemon_uninstall():
         raise typer.Exit(1)
 
 
+@app.command()
+def triage(
+    limit: int = typer.Option(20, "--limit", "-n", help="Number of items to triage"),
+    confidence: float = typer.Option(0.7, "--confidence", "-c", help="Minimum confidence"),
+    dry_run: bool = typer.Option(False, "--dry-run", "-d", help="Show proposals without creating"),
+    auto_execute: bool = typer.Option(False, "--execute", "-x", help="Auto-execute after approval"),
+):
+    """Triage inbox — Claude bulk-proposes actions"""
+    from . import triage as triage_module
+
+    typer.echo("Scanning inbox...")
+    proposals = triage_module.triage_inbox(limit=limit)
+
+    if not proposals:
+        typer.echo("No items to triage or triage failed")
+        return
+
+    typer.echo(f"\nFound {len(proposals)} proposals:\n")
+
+    for p in proposals:
+        conf = f"{p.confidence:.0%}"
+        source = "📧" if p.item.source == "email" else "💬"
+        skip = " (skip)" if p.confidence < confidence or p.action == "ignore" else ""
+        typer.echo(f"{source} [{conf}] {p.action:10} {p.item.sender[:20]:20} {p.reasoning}{skip}")
+
+    created = triage_module.create_proposals_from_triage(
+        proposals,
+        min_confidence=confidence,
+        dry_run=dry_run,
+    )
+
+    if dry_run:
+        typer.echo(f"\nDry run: would create {len(created)} proposals")
+        return
+
+    typer.echo(f"\nCreated {len(created)} proposals")
+
+    if auto_execute and created:
+        typer.echo("\nExecuting approved proposals...")
+        results = services.execute_approved_proposals()
+        executed = sum(1 for r in results if r.success)
+        typer.echo(f"Executed: {executed}/{len(results)}")
+
+
 def main():
     db.init()
     app()
