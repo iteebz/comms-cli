@@ -67,10 +67,32 @@ def propose(
 
 @app.command()
 def approve(
-    proposal_id: str,
+    proposal_id: str = typer.Argument(None),
     human: str = typer.Option(None, "--human", help="Human reasoning for approval"),
+    all_pending: bool = typer.Option(False, "--all", help="Approve all pending proposals"),
+    action: str = typer.Option(None, "--action", "-a", help="Approve all with this action"),
 ):
-    """Approve proposal"""
+    """Approve proposal(s)"""
+    if all_pending or action:
+        props = proposals_module.list_proposals(status="pending")
+        if action:
+            props = [p for p in props if p["proposed_action"] == action]
+
+        if not props:
+            typer.echo("No matching proposals")
+            return
+
+        count = 0
+        for p in props:
+            if proposals_module.approve_proposal(p["id"], user_reasoning=human):
+                count += 1
+        typer.echo(f"Approved {count} proposals")
+        return
+
+    if not proposal_id:
+        typer.echo("Provide proposal_id or use --all/--action")
+        raise typer.Exit(1)
+
     if proposals_module.approve_proposal(proposal_id, user_reasoning=human):
         typer.echo(f"Approved {proposal_id[:8]}")
     else:
@@ -80,13 +102,35 @@ def approve(
 
 @app.command()
 def reject(
-    proposal_id: str,
+    proposal_id: str = typer.Argument(None),
     human: str = typer.Option(None, "--human", help="Human reasoning for rejection"),
     correct: str = typer.Option(
         None, "--correct", help="Corrected action (e.g., 'delete' instead of 'archive')"
     ),
+    all_pending: bool = typer.Option(False, "--all", help="Reject all pending proposals"),
+    action: str = typer.Option(None, "--action", "-a", help="Reject all with this action"),
 ):
-    """Reject proposal (optionally with correction)"""
+    """Reject proposal(s) (optionally with correction)"""
+    if all_pending or action:
+        props = proposals_module.list_proposals(status="pending")
+        if action:
+            props = [p for p in props if p["proposed_action"] == action]
+
+        if not props:
+            typer.echo("No matching proposals")
+            return
+
+        count = 0
+        for p in props:
+            if proposals_module.reject_proposal(p["id"], user_reasoning=human, correction=correct):
+                count += 1
+        typer.echo(f"Rejected {count} proposals")
+        return
+
+    if not proposal_id:
+        typer.echo("Provide proposal_id or use --all/--action")
+        raise typer.Exit(1)
+
     if proposals_module.reject_proposal(proposal_id, user_reasoning=human, correction=correct):
         if correct:
             typer.echo(f"Rejected {proposal_id[:8]} with correction: {correct}")
