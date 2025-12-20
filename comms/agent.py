@@ -1,0 +1,159 @@
+"""Agent bus — parse Signal messages as commands, execute, respond."""
+
+from __future__ import annotations
+
+import subprocess
+from dataclasses import dataclass
+
+from .config import COMMS_DIR
+
+AUTHORIZED_FILE = COMMS_DIR / "authorized_senders.txt"
+
+
+@dataclass
+class Command:
+    action: str
+    args: list[str]
+    raw: str
+
+
+@dataclass
+class CommandResult:
+    success: bool
+    message: str
+    executed: str
+
+
+def get_authorized_senders() -> set[str]:
+    if not AUTHORIZED_FILE.exists():
+        return set()
+    lines = AUTHORIZED_FILE.read_text().strip().split("\n")
+    return {line.strip() for line in lines if line.strip() and not line.startswith("#")}
+
+
+def add_authorized_sender(phone: str) -> None:
+    COMMS_DIR.mkdir(exist_ok=True)
+    senders = get_authorized_senders()
+    senders.add(phone)
+    AUTHORIZED_FILE.write_text("\n".join(sorted(senders)) + "\n")
+
+
+def remove_authorized_sender(phone: str) -> bool:
+    senders = get_authorized_senders()
+    if phone not in senders:
+        return False
+    senders.discard(phone)
+    AUTHORIZED_FILE.write_text("\n".join(sorted(senders)) + "\n")
+    return True
+
+
+def is_command(text: str) -> bool:
+    text = text.strip().lower()
+    return text.startswith("!") or text.startswith("comms ")
+
+
+def parse_command(text: str) -> Command | None:
+    text = text.strip()
+    if not is_command(text):
+        return None
+
+    if text.startswith("!"):
+        text = text[1:]
+    elif text.lower().startswith("comms "):
+        text = text[6:]
+
+    parts = text.split()
+    if not parts:
+        return None
+
+    action = parts[0].lower()
+    args = parts[1:]
+
+    return Command(action=action, args=args, raw=text)
+
+
+COMMAND_MAP = {
+    "inbox": "comms inbox -n 5",
+    "status": "comms status",
+    "triage": "comms triage --dry-run -n 10",
+    "stats": "comms stats",
+    "help": None,
+}
+
+
+def _run_comms_command(cmd: str) -> tuple[bool, str]:
+    try:
+        result = subprocess.run(
+            cmd.split(),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        output = result.stdout.strip() or result.stderr.strip()
+        return result.returncode == 0, output[:500]
+    except subprocess.TimeoutExpired:
+        return False, "Command timed out"
+    except Exception as e:
+        return False, str(e)
+
+
+def execute_command(cmd: Command) -> CommandResult:
+    action = cmd.action
+
+    if action == "help":
+        help_text = "Commands: " + ", ".join(sorted(COMMAND_MAP.keys()))
+        return CommandResult(success=True, message=help_text, executed="help")
+
+    if action == "ping":
+        return CommandResult(success=True, message="pong", executed="ping")
+
+    if action in COMMAND_MAP:
+        comms_cmd = COMMAND_MAP[action]
+        success, output = _run_comms_command(comms_cmd)
+        return CommandResult(success=success, message=output, executed=comms_cmd)
+
+    if action == "archive" and cmd.args:
+        thread_id = cmd.args[0]
+        success, output = _run_comms_command(f"comms archive {thread_id}")
+        return CommandResult(
+            success=success,
+            message=output or f"Archived {thread_id}",
+            executed=f"archive {thread_id}",
+        )
+
+    if action == "delete" and cmd.args:
+        thread_id = cmd.args[0]
+        success, output = _run_comms_command(f"comms delete {thread_id}")
+        return CommandResult(
+            success=success,
+            message=output or f"Deleted {thread_id}",
+            executed=f"delete {thread_id}",
+        )
+
+    return CommandResult(success=False, message=f"Unknown command: {action}", executed=action)
+
+
+def process_message(phone: str, sender: str, body: str) -> CommandResult | None:
+    authorized = get_authorized_senders()
+    if authorized and sender not in authorized:
+        return None
+
+    if not is_command(body):
+        return None
+
+    cmd = parse_command(body)
+    if not cmd:
+        return None
+
+    return execute_command(cmd)
+
+
+def handle_incoming(phone: str, message: dict) -> str | None:
+    sender = message.get("sender_phone", "")
+    body = message.get("body", "")
+
+    result = process_message(phone, sender, body)
+    if not result:
+        return None
+
+    return result.message

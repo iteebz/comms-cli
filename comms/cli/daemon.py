@@ -1,8 +1,43 @@
-"""Daemon management commands."""
+"""Daemon and agent management commands."""
 
 import typer
 
 app = typer.Typer()
+
+
+@app.command()
+def agent_authorize(phone: str = typer.Argument(..., help="Phone number to authorize")):
+    """Authorize a phone number to send commands"""
+    from .. import agent
+
+    agent.add_authorized_sender(phone)
+    typer.echo(f"Authorized: {phone}")
+
+
+@app.command()
+def agent_revoke(phone: str = typer.Argument(..., help="Phone number to revoke")):
+    """Revoke command authorization from a phone number"""
+    from .. import agent
+
+    if agent.remove_authorized_sender(phone):
+        typer.echo(f"Revoked: {phone}")
+    else:
+        typer.echo(f"Not authorized: {phone}")
+
+
+@app.command()
+def agent_list():
+    """List authorized command senders"""
+    from .. import agent
+
+    senders = agent.get_authorized_senders()
+    if not senders:
+        typer.echo("No authorized senders (all senders allowed)")
+        return
+
+    typer.echo("Authorized senders:")
+    for s in sorted(senders):
+        typer.echo(f"  {s}")
 
 
 @app.command()

@@ -23,7 +23,9 @@ def _get_signal_phones() -> list[str]:
     return [a["email"] for a in accounts if a["provider"] == "signal"]
 
 
-def _poll_once(phones: list[str], timeout: int = 1) -> int:
+def _poll_once(phones: list[str], timeout: int = 1, agent_mode: bool = True) -> int:
+    from . import agent
+
     total = 0
     for phone in phones:
         try:
@@ -31,7 +33,16 @@ def _poll_once(phones: list[str], timeout: int = 1) -> int:
             if msgs:
                 total += len(msgs)
                 for m in msgs:
-                    _log(f"[{phone}] {m.get('from_name', m['from'])}: {m['body'][:50]}")
+                    sender = m.get("from_name", m.get("sender_phone", "Unknown"))
+                    _log(f"[{phone}] {sender}: {m['body'][:50]}")
+
+                    if agent_mode:
+                        response = agent.handle_incoming(phone, m)
+                        if response:
+                            sender_phone = m.get("sender_phone", "")
+                            if sender_phone:
+                                signal_adapter.send(phone, sender_phone, response)
+                                _log(f"[{phone}] -> {sender_phone}: {response[:50]}")
         except Exception as e:
             _log(f"[{phone}] Error: {e}")
     return total
