@@ -65,6 +65,17 @@ def get_messages(
         return [dict(row) for row in rows]
 
 
+def get_message(message_id: str) -> dict | None:
+    from ...db import get_db
+
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM signal_messages WHERE id = ? OR id LIKE ?",
+            (message_id, f"{message_id}%"),
+        ).fetchone()
+        return dict(row) if row else None
+
+
 def mark_read(message_id: str) -> bool:
     from ...db import get_db
 
@@ -74,6 +85,20 @@ def mark_read(message_id: str) -> bool:
             (datetime.now().isoformat(), message_id),
         )
     return True
+
+
+def reply(phone: str, message_id: str, body: str) -> tuple[bool, str, dict | None]:
+    msg = get_message(message_id)
+    if not msg:
+        return False, f"Message {message_id} not found", None
+
+    recipient = msg["sender_phone"]
+    success, result = send(phone, recipient, body)
+
+    if success:
+        mark_read(msg["id"])
+
+    return success, result, msg
 
 
 def get_conversations(phone: str) -> list[dict]:

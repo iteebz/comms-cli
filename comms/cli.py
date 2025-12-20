@@ -398,7 +398,8 @@ def signal_history(
     for msg in msgs:
         sender = msg["sender_name"] or msg["sender_phone"]
         ts = datetime.fromtimestamp(msg["timestamp"] / 1000).strftime("%m-%d %H:%M")
-        typer.echo(f"[{ts}] {sender}: {msg['body']}")
+        msg_id = msg["id"][:8] if msg.get("id") else ""
+        typer.echo(f"{msg_id} [{ts}] {sender}: {msg['body']}")
 
 
 @app.command()
@@ -420,6 +421,26 @@ def signal_send(
         typer.echo(f"Sent to {recipient}")
     else:
         typer.echo(f"Failed: {msg}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def signal_reply(
+    message_id: str = typer.Argument(..., help="Message ID to reply to"),
+    message: str = typer.Option(..., "--message", "-m", help="Reply message"),
+    phone: str = typer.Option(None, "--phone", "-p"),
+):
+    """Reply to a Signal message"""
+    phone = _get_signal_phone(phone)
+
+    success, result, original = signal.reply(phone, message_id, message)
+
+    if success:
+        sender = original["sender_name"] or original["sender_phone"]
+        typer.echo(f"Replied to {sender}")
+        typer.echo(f"  Original: {original['body'][:50]}...")
+    else:
+        typer.echo(f"Failed: {result}")
         raise typer.Exit(1)
 
 
