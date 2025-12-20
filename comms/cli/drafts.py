@@ -105,18 +105,21 @@ def reply(
     thread_id: str,
     body: str = typer.Option(None, "--body", "-b"),
     email: str = typer.Option(None, "--email", "-e"),
+    reply_all: bool = typer.Option(False, "--all", "-a", help="Reply to all recipients"),
 ):
     """Reply to thread"""
     if not body:
         typer.echo("Error: --body required")
         raise typer.Exit(1)
 
-    draft_id, original_from, reply_subject = run_service(
-        services.reply_to_thread, thread_id=thread_id, body=body, email=email
+    draft_id, to_addr, reply_subject, cc_addr = run_service(
+        services.reply_to_thread, thread_id=thread_id, body=body, email=email, reply_all=reply_all
     )
 
     typer.echo(f"Created reply draft {draft_id[:8]}")
-    typer.echo(f"To: {original_from}")
+    typer.echo(f"To: {to_addr}")
+    if cc_addr:
+        typer.echo(f"Cc: {cc_addr}")
     typer.echo(f"Subject: {reply_subject}")
     typer.echo(f"\nRun `comms approve {draft_id[:8]}` to approve for sending")
 
@@ -126,6 +129,7 @@ def draft_reply(
     thread_id: str,
     instructions: str = typer.Option(None, "--instructions", "-i", help="Instructions for Claude"),
     email: str = typer.Option(None, "--email", "-e"),
+    reply_all: bool = typer.Option(False, "--all", "-a", help="Reply to all recipients"),
 ):
     """Generate reply draft using Claude"""
     from .. import claude
@@ -149,13 +153,15 @@ def draft_reply(
         typer.echo(f"Failed: {reasoning}")
         raise typer.Exit(1)
 
-    draft_id, original_from, reply_subject = run_service(
-        services.reply_to_thread, thread_id=full_id, body=body, email=email
+    draft_id, to_addr, reply_subject, cc_addr = run_service(
+        services.reply_to_thread, thread_id=full_id, body=body, email=email, reply_all=reply_all
     )
 
     typer.echo(f"\nReasoning: {reasoning}")
     typer.echo(f"\nDraft {draft_id[:8]}:")
-    typer.echo(f"To: {original_from}")
+    typer.echo(f"To: {to_addr}")
+    if cc_addr:
+        typer.echo(f"Cc: {cc_addr}")
     typer.echo(f"Subject: {reply_subject}")
     typer.echo(f"\n{body}\n")
     typer.echo(f"Run `comms approve {draft_id[:8]}` to approve")

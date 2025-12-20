@@ -55,11 +55,48 @@ def compose_email_draft(
     return draft_id, from_addr
 
 
+def _extract_email(addr: str) -> str:
+    if "<" in addr and ">" in addr:
+        return addr.split("<")[1].split(">")[0].strip()
+    return addr.strip()
+
+
+def _build_reply_recipients(
+    messages: list[dict], my_email: str, reply_all: bool
+) -> tuple[str, str | None]:
+    last_msg = messages[-1]
+    original_from = last_msg["from"]
+    to_addr = original_from
+
+    if not reply_all:
+        return to_addr, None
+
+    all_recipients: set[str] = set()
+    my_email_lower = my_email.lower()
+
+    for msg in messages:
+        for field in ["from", "to", "cc"]:
+            raw = msg.get(field, "")
+            if not raw:
+                continue
+            for part in raw.split(","):
+                email = _extract_email(part)
+                if email and email.lower() != my_email_lower:
+                    all_recipients.add(email)
+
+    to_email = _extract_email(original_from)
+    all_recipients.discard(to_email)
+
+    cc_addr = ", ".join(sorted(all_recipients)) if all_recipients else None
+    return to_addr, cc_addr
+
+
 def reply_to_thread(
     thread_id: str,
     body: str,
     email: str | None,
-) -> tuple[str, str, str]:
+    reply_all: bool = False,
+) -> tuple[str, str, str, str | None]:
     account = _resolve_email_account(email)
     adapter = _get_email_adapter(account["provider"])
     from_addr = account["email"]
@@ -72,18 +109,20 @@ def reply_to_thread(
     reply_subject = (
         original_subject if original_subject.startswith("Re: ") else f"Re: {original_subject}"
     )
-    original_from = messages[-1]["from"]
+
+    to_addr, cc_addr = _build_reply_recipients(messages, from_addr, reply_all)
 
     draft_id = drafts.create_draft(
-        to_addr=original_from,
+        to_addr=to_addr,
         subject=reply_subject,
         body=body,
+        cc_addr=cc_addr,
         thread_id=thread_id,
         from_account_id=account["id"],
         from_addr=from_addr,
     )
 
-    return draft_id, original_from, reply_subject
+    return draft_id, to_addr, reply_subject, cc_addr
 
 
 def send_draft(draft_id: str) -> None:

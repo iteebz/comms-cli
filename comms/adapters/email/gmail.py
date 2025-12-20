@@ -119,6 +119,8 @@ def fetch_thread_messages(thread_id: str, email_addr: str) -> list[dict]:
         messages.append(
             {
                 "from": headers.get("from", ""),
+                "to": headers.get("to", ""),
+                "cc": headers.get("cc", ""),
                 "date": headers.get("date", ""),
                 "subject": headers.get("subject", ""),
                 "body": body,

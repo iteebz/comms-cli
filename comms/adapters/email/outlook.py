@@ -197,11 +197,24 @@ def list_threads(email: str, label: str = "inbox", max_results: int = 50) -> lis
     return threads
 
 
+def _format_recipients(recipients: list[dict]) -> str:
+    parts = []
+    for r in recipients:
+        addr = r.get("emailAddress", {})
+        email_addr = addr.get("address", "")
+        name = addr.get("name", "")
+        if name and name != email_addr:
+            parts.append(f"{name} <{email_addr}>")
+        else:
+            parts.append(email_addr)
+    return ", ".join(parts)
+
+
 def fetch_thread_messages(thread_id: str, email: str) -> list[dict]:
     params = {
         "$filter": f"conversationId eq '{thread_id}'",
         "$orderby": "receivedDateTime asc",
-        "$select": "id,subject,from,receivedDateTime,body",
+        "$select": "id,subject,from,toRecipients,ccRecipients,receivedDateTime,body",
         "$top": 50,
     }
 
@@ -225,6 +238,8 @@ def fetch_thread_messages(thread_id: str, email: str) -> list[dict]:
         messages.append(
             {
                 "from": f"{from_name} <{from_addr}>" if from_name != from_addr else from_addr,
+                "to": _format_recipients(msg.get("toRecipients", [])),
+                "cc": _format_recipients(msg.get("ccRecipients", [])),
                 "date": msg.get("receivedDateTime", ""),
                 "subject": msg.get("subject", ""),
                 "body": body_content,
