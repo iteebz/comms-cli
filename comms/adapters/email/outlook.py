@@ -1,16 +1,17 @@
-import hashlib
+"""Outlook adapter via Microsoft Graph API."""
+
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import keyring
 import msal
 import requests
 
-from ...models import Draft, Message
+from ...models import Draft
 
 AUTHORITY = "https://login.microsoftonline.com/common"
-SCOPES = ["https://graph.microsoft.com/Mail.ReadWrite"]
-GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
+SCOPES = ["https://graph.microsoft.com/Mail.ReadWrite", "https://graph.microsoft.com/Mail.Send"]
+GRAPH_API = "https://graph.microsoft.com/v1.0"
 
 SERVICE_NAME = "comms-cli/outlook"
 TOKEN_KEY_SUFFIX = "/token"
@@ -18,158 +19,345 @@ CLIENT_ID_SUFFIX = "/client_id"
 CLIENT_SECRET_SUFFIX = "/client_secret"
 
 
-def _get_token(email_addr: str) -> dict | None:
-    token_json = keyring.get_password(SERVICE_NAME, f"{email_addr}{TOKEN_KEY_SUFFIX}")
-    if token_json:
-        return json.loads(token_json)
-    return None
+def _get_token_cache(email: str) -> dict | None:
+    data = keyring.get_password(SERVICE_NAME, f"{email}{TOKEN_KEY_SUFFIX}")
+    return json.loads(data) if data else None
 
 
-def _set_token(email_addr: str, token_dict: dict):
-    keyring.set_password(SERVICE_NAME, f"{email_addr}{TOKEN_KEY_SUFFIX}", json.dumps(token_dict))
+def _set_token_cache(email: str, cache_data: str):
+    keyring.set_password(SERVICE_NAME, f"{email}{TOKEN_KEY_SUFFIX}", cache_data)
 
 
-def _get_client_creds(email_addr: str) -> tuple[str | None, str | None]:
-    client_id = keyring.get_password(SERVICE_NAME, f"{email_addr}{CLIENT_ID_SUFFIX}")
-    client_secret = keyring.get_password(SERVICE_NAME, f"{email_addr}{CLIENT_SECRET_SUFFIX}")
+def _get_client_creds(email: str) -> tuple[str | None, str | None]:
+    client_id = keyring.get_password(SERVICE_NAME, f"{email}{CLIENT_ID_SUFFIX}")
+    client_secret = keyring.get_password(SERVICE_NAME, f"{email}{CLIENT_SECRET_SUFFIX}")
     return client_id, client_secret
 
 
-def _set_client_creds(email_addr: str, client_id: str, client_secret: str):
-    keyring.set_password(SERVICE_NAME, f"{email_addr}{CLIENT_ID_SUFFIX}", client_id)
-    keyring.set_password(SERVICE_NAME, f"{email_addr}{CLIENT_SECRET_SUFFIX}", client_secret)
+def store_credentials(email: str, client_id: str, client_secret: str):
+    keyring.set_password(SERVICE_NAME, f"{email}{CLIENT_ID_SUFFIX}", client_id)
+    keyring.set_password(SERVICE_NAME, f"{email}{CLIENT_SECRET_SUFFIX}", client_secret)
 
 
-def _get_access_token(email_addr: str) -> str | None:
-    client_id, client_secret = _get_client_creds(email_addr)
+def _get_access_token(email: str) -> str | None:
+    client_id, client_secret = _get_client_creds(email)
     if not client_id or not client_secret:
         return None
 
-    _get_token(email_addr)
+    cache = msal.SerializableTokenCache()
+    cache_data = keyring.get_password(SERVICE_NAME, f"{email}{TOKEN_KEY_SUFFIX}")
+    if cache_data:
+        cache.deserialize(cache_data)
+
     app = msal.ConfidentialClientApplication(
-        client_id, authority=AUTHORITY, client_credential=client_secret
+        client_id,
+        authority=AUTHORITY,
+        client_credential=client_secret,
+        token_cache=cache,
     )
 
     accounts = app.get_accounts()
     if accounts:
         result = app.acquire_token_silent(SCOPES, account=accounts[0])
         if result and "access_token" in result:
+            if cache.has_state_changed:
+                _set_token_cache(email, cache.serialize())
             return result["access_token"]
 
     flow = app.initiate_device_flow(scopes=SCOPES)
     if "user_code" not in flow:
-        raise ValueError("Failed to create device flow")
+        return None
 
     print(flow["message"])
-
     result = app.acquire_token_by_device_flow(flow)
+
     if "access_token" in result:
-        _set_token(email_addr, result)
+        _set_token_cache(email, cache.serialize())
         return result["access_token"]
 
     return None
 
 
+def _api_get(email: str, endpoint: str, params: dict | None = None) -> dict | None:
+    token = _get_access_token(email)
+    if not token:
+        return None
+
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.get(f"{GRAPH_API}{endpoint}", headers=headers, params=params)
+    if resp.status_code == 200:
+        return resp.json()
+    return None
+
+
+def _api_post(email: str, endpoint: str, data: dict) -> bool:
+    token = _get_access_token(email)
+    if not token:
+        return False
+
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    resp = requests.post(f"{GRAPH_API}{endpoint}", headers=headers, json=data)
+    return resp.status_code in (200, 201, 202, 204)
+
+
+def _api_patch(email: str, endpoint: str, data: dict) -> bool:
+    token = _get_access_token(email)
+    if not token:
+        return False
+
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    resp = requests.patch(f"{GRAPH_API}{endpoint}", headers=headers, json=data)
+    return resp.status_code in (200, 204)
+
+
 def test_connection(
-    account_id: str, email_addr: str, client_id: str | None = None, client_secret: str | None = None
+    account_id: str, email: str, client_id: str | None = None, client_secret: str | None = None
 ) -> tuple[bool, str]:
     if client_id and client_secret:
-        _set_client_creds(email_addr, client_id, client_secret)
+        store_credentials(email, client_id, client_secret)
 
     try:
-        token = _get_access_token(email_addr)
-        if not token:
-            return False, "Failed to get access token"
-
-        headers = {"Authorization": f"Bearer {token}"}
-        response = requests.get(f"{GRAPH_API_ENDPOINT}/me", headers=headers)
-        if response.status_code == 200:
+        result = _api_get(email, "/me")
+        if result:
             return True, "Connected successfully"
-        return False, f"HTTP {response.status_code}"
+        return False, "Failed to get user profile"
     except Exception as e:
         return False, f"Connection failed: {e}"
 
 
-def fetch_threads(account_id: str, email_addr: str) -> list[dict]:
-    return []
+def count_inbox_threads(email: str) -> int:
+    result = _api_get(email, "/me/mailFolders/inbox")
+    if result:
+        return result.get("totalItemCount", 0)
+    return 0
 
 
-def fetch_messages(account_id: str, email_addr: str, since_days: int = 7) -> list[Message]:
-    token = _get_access_token(email_addr)
-    if not token:
+def list_threads(email: str, label: str = "inbox", max_results: int = 50) -> list[dict]:
+    folder_map = {
+        "inbox": "inbox",
+        "archive": "archive",
+        "trash": "deleteditems",
+        "sent": "sentitems",
+        "drafts": "drafts",
+    }
+    folder = folder_map.get(label, "inbox")
+
+    params = {
+        "$top": max_results,
+        "$orderby": "receivedDateTime desc",
+        "$select": "id,conversationId,subject,from,receivedDateTime,isRead,bodyPreview",
+    }
+
+    if label == "unread":
+        params["$filter"] = "isRead eq false"
+        folder = "inbox"
+    elif label == "starred":
+        params["$filter"] = "flag/flagStatus eq 'flagged'"
+        folder = "inbox"
+
+    result = _api_get(email, f"/me/mailFolders/{folder}/messages", params)
+    if not result:
         return []
 
-    headers = {"Authorization": f"Bearer {token}"}
-    since_date = (datetime.now() - timedelta(days=since_days)).isoformat()
-    filter_query = f"receivedDateTime ge {since_date}"
+    seen_convos = set()
+    threads = []
 
-    response = requests.get(
-        f"{GRAPH_API_ENDPOINT}/me/messages",
-        headers=headers,
-        params={"$filter": filter_query, "$top": 100},
-    )
+    for msg in result.get("value", []):
+        convo_id = msg.get("conversationId", msg["id"])
+        if convo_id in seen_convos:
+            continue
+        seen_convos.add(convo_id)
 
-    if response.status_code != 200:
+        from_data = msg.get("from", {}).get("emailAddress", {})
+        from_addr = from_data.get("address", "")
+        from_name = from_data.get("name", from_addr)
+
+        received = msg.get("receivedDateTime", "")
+        timestamp = 0
+        if received:
+            try:
+                dt = datetime.fromisoformat(received.replace("Z", "+00:00"))
+                timestamp = int(dt.timestamp() * 1000)
+            except ValueError:
+                pass
+
+        threads.append(
+            {
+                "id": convo_id,
+                "message_id": msg["id"],
+                "snippet": msg.get("bodyPreview", "")[:100],
+                "from": from_name,
+                "subject": msg.get("subject", "(no subject)"),
+                "date": received[:16] if received else "",
+                "timestamp": timestamp,
+                "labels": [] if msg.get("isRead", True) else ["UNREAD"],
+            }
+        )
+
+    return threads
+
+
+def fetch_thread_messages(thread_id: str, email: str) -> list[dict]:
+    params = {
+        "$filter": f"conversationId eq '{thread_id}'",
+        "$orderby": "receivedDateTime asc",
+        "$select": "id,subject,from,receivedDateTime,body",
+        "$top": 50,
+    }
+
+    result = _api_get(email, "/me/messages", params)
+    if not result:
         return []
 
     messages = []
-    for item in response.json().get("value", []):
-        msg_id = item.get("id", "")
-        thread_id = item.get("conversationId", msg_id)
-        from_addr = item.get("from", {}).get("emailAddress", {}).get("address", "")
-        to_addrs = item.get("toRecipients", [])
-        to_addr = to_addrs[0].get("emailAddress", {}).get("address", "") if to_addrs else ""
-        subject = item.get("subject", "")
-        body = item.get("body", {}).get("content", "")
-        received_dt = item.get("receivedDateTime", "")
-        is_read = item.get("isRead", True)
+    for msg in result.get("value", []):
+        from_data = msg.get("from", {}).get("emailAddress", {})
+        from_addr = from_data.get("address", "")
+        from_name = from_data.get("name", from_addr)
 
-        msg_hash = hashlib.sha256(f"{msg_id}{from_addr}{received_dt}".encode()).hexdigest()[:16]
-        thread_hash = hashlib.sha256(thread_id.encode()).hexdigest()[:16]
+        body_content = msg.get("body", {}).get("content", "")
+        if msg.get("body", {}).get("contentType") == "html":
+            import re
+
+            body_content = re.sub(r"<[^>]+>", "", body_content)
+            body_content = body_content.strip()
 
         messages.append(
-            Message(
-                id=msg_hash,
-                thread_id=thread_hash,
-                account_id=account_id,
-                provider="outlook",
-                from_addr=from_addr,
-                to_addr=to_addr,
-                subject=subject,
-                body=body,
-                body_html=item.get("body", {}).get("content", ""),
-                headers=json.dumps(item),
-                status="read" if is_read else "unread",
-                timestamp=datetime.fromisoformat(received_dt.replace("Z", "+00:00")),
-                synced_at=datetime.now(),
-            )
+            {
+                "from": f"{from_name} <{from_addr}>" if from_name != from_addr else from_addr,
+                "date": msg.get("receivedDateTime", ""),
+                "subject": msg.get("subject", ""),
+                "body": body_content,
+            }
         )
 
     return messages
 
 
-def send_message(account_id: str, email_addr: str, draft: Draft) -> bool:
-    token = _get_access_token(email_addr)
-    if not token:
+def archive_thread(thread_id: str, email: str) -> bool:
+    params = {"$filter": f"conversationId eq '{thread_id}'", "$select": "id"}
+    result = _api_get(email, "/me/mailFolders/inbox/messages", params)
+    if not result:
         return False
 
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    archive_id = _get_or_create_archive_folder(email)
+    if not archive_id:
+        return False
 
+    success = True
+    for msg in result.get("value", []):
+        if not _api_post(email, f"/me/messages/{msg['id']}/move", {"destinationId": archive_id}):
+            success = False
+
+    return success
+
+
+def _get_or_create_archive_folder(email: str) -> str | None:
+    result = _api_get(email, "/me/mailFolders", {"$filter": "displayName eq 'Archive'"})
+    if result and result.get("value"):
+        return result["value"][0]["id"]
+
+    resp = _api_post(email, "/me/mailFolders", {"displayName": "Archive"})
+    if resp:
+        result = _api_get(email, "/me/mailFolders", {"$filter": "displayName eq 'Archive'"})
+        if result and result.get("value"):
+            return result["value"][0]["id"]
+
+    return None
+
+
+def delete_thread(thread_id: str, email: str) -> bool:
+    params = {"$filter": f"conversationId eq '{thread_id}'", "$select": "id"}
+    result = _api_get(email, "/me/messages", params)
+    if not result:
+        return False
+
+    success = True
+    for msg in result.get("value", []):
+        if not _api_post(
+            email, f"/me/messages/{msg['id']}/move", {"destinationId": "deleteditems"}
+        ):
+            success = False
+
+    return success
+
+
+def flag_thread(thread_id: str, email: str) -> bool:
+    return _set_thread_flag(thread_id, email, "flagged")
+
+
+def unflag_thread(thread_id: str, email: str) -> bool:
+    return _set_thread_flag(thread_id, email, "notFlagged")
+
+
+def _set_thread_flag(thread_id: str, email: str, flag_status: str) -> bool:
+    params = {"$filter": f"conversationId eq '{thread_id}'", "$select": "id"}
+    result = _api_get(email, "/me/messages", params)
+    if not result:
+        return False
+
+    success = True
+    for msg in result.get("value", []):
+        if not _api_patch(
+            email, f"/me/messages/{msg['id']}", {"flag": {"flagStatus": flag_status}}
+        ):
+            success = False
+
+    return success
+
+
+def unarchive_thread(thread_id: str, email: str) -> bool:
+    archive_id = _get_or_create_archive_folder(email)
+    if not archive_id:
+        return False
+
+    params = {"$filter": f"conversationId eq '{thread_id}'", "$select": "id"}
+    result = _api_get(email, f"/me/mailFolders/{archive_id}/messages", params)
+    if not result:
+        return False
+
+    inbox_result = _api_get(email, "/me/mailFolders/inbox")
+    if not inbox_result:
+        return False
+    inbox_id = inbox_result["id"]
+
+    success = True
+    for msg in result.get("value", []):
+        if not _api_post(email, f"/me/messages/{msg['id']}/move", {"destinationId": inbox_id}):
+            success = False
+
+    return success
+
+
+def undelete_thread(thread_id: str, email: str) -> bool:
+    params = {"$filter": f"conversationId eq '{thread_id}'", "$select": "id"}
+    result = _api_get(email, "/me/mailFolders/deleteditems/messages", params)
+    if not result:
+        return False
+
+    inbox_result = _api_get(email, "/me/mailFolders/inbox")
+    if not inbox_result:
+        return False
+    inbox_id = inbox_result["id"]
+
+    success = True
+    for msg in result.get("value", []):
+        if not _api_post(email, f"/me/messages/{msg['id']}/move", {"destinationId": inbox_id}):
+            success = False
+
+    return success
+
+
+def send_message(account_id: str, email: str, draft: Draft) -> bool:
     message = {
-        "subject": draft.subject or "(no subject)",
-        "body": {"contentType": "Text", "content": draft.body},
-        "toRecipients": [{"emailAddress": {"address": draft.to_addr}}],
+        "message": {
+            "subject": draft.subject or "(no subject)",
+            "body": {"contentType": "Text", "content": draft.body},
+            "toRecipients": [{"emailAddress": {"address": draft.to_addr}}],
+        }
     }
 
     if draft.cc_addr:
-        message["ccRecipients"] = [{"emailAddress": {"address": draft.cc_addr}}]
+        message["message"]["ccRecipients"] = [{"emailAddress": {"address": draft.cc_addr}}]
 
-    response = requests.post(
-        f"{GRAPH_API_ENDPOINT}/me/sendMail", headers=headers, json={"message": message}
-    )
-
-    return response.status_code == 202
-
-
-def store_credentials(email_addr: str, client_id: str, client_secret: str):
-    _set_client_creds(email_addr, client_id, client_secret)
+    return _api_post(email, "/me/sendMail", message)

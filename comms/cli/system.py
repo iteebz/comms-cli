@@ -6,7 +6,7 @@ import typer
 
 from .. import accounts as accts_module
 from .. import db, services
-from ..adapters.email import gmail
+from ..adapters.email import gmail, outlook
 
 app = typer.Typer()
 
@@ -18,6 +18,9 @@ def show_dashboard():
     for account in accounts:
         if account["provider"] == "gmail":
             count = gmail.count_inbox_threads(account["email"])
+            total_inbox += count
+        elif account["provider"] == "outlook":
+            count = outlook.count_inbox_threads(account["email"])
             total_inbox += count
 
     with db.get_db() as conn:

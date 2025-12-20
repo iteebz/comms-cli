@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from . import accounts as accts_module
 from . import drafts, policy, proposals
-from .adapters.email import gmail
+from .adapters.email import gmail, outlook
 from .adapters.messaging import signal
 
 
@@ -25,11 +25,12 @@ def _resolve_email_account(email: str | None) -> dict:
     raise ValueError(error or "No email account found")
 
 
-def _require_gmail_account(email: str | None) -> dict:
-    account = _resolve_email_account(email)
-    if account["provider"] != "gmail":
-        raise ValueError(f"Provider {account['provider']} not supported for this command")
-    return account
+def _get_email_adapter(provider: str):
+    if provider == "gmail":
+        return gmail
+    if provider == "outlook":
+        return outlook
+    raise ValueError(f"Provider {provider} not supported")
 
 
 def compose_email_draft(
@@ -59,10 +60,11 @@ def reply_to_thread(
     body: str,
     email: str | None,
 ) -> tuple[str, str, str]:
-    account = _require_gmail_account(email)
+    account = _resolve_email_account(email)
+    adapter = _get_email_adapter(account["provider"])
     from_addr = account["email"]
 
-    messages = gmail.fetch_thread_messages(thread_id, from_addr)
+    messages = adapter.fetch_thread_messages(thread_id, from_addr)
     if not messages:
         raise ValueError(f"Thread not found: {thread_id}")
 
@@ -101,10 +103,8 @@ def send_draft(draft_id: str) -> None:
     if not account:
         raise ValueError(f"Account not found: {d.from_account_id}")
 
-    if account["provider"] == "gmail":
-        success = gmail.send_message(account["id"], d.from_addr, d)
-    else:
-        raise ValueError(f"Provider {account['provider']} not yet implemented")
+    adapter = _get_email_adapter(account["provider"])
+    success = adapter.send_message(account["id"], d.from_addr, d)
 
     if not success:
         raise ValueError("Failed to send")
@@ -116,9 +116,12 @@ def list_threads(label: str) -> list[dict]:
     accounts = accts_module.list_accounts("email")
     results = []
     for account in accounts:
-        if account["provider"] == "gmail":
-            threads = gmail.list_threads(account["email"], label=label)
+        try:
+            adapter = _get_email_adapter(account["provider"])
+            threads = adapter.list_threads(account["email"], label=label)
             results.append({"account": account, "threads": threads})
+        except ValueError:
+            continue
     return results
 
 
@@ -138,8 +141,9 @@ def get_unified_inbox(limit: int = 20) -> list[InboxItem]:
 
     email_accounts = accts_module.list_accounts("email")
     for account in email_accounts:
-        if account["provider"] == "gmail":
-            threads = gmail.list_threads(account["email"], label="inbox", max_results=limit)
+        try:
+            adapter = _get_email_adapter(account["provider"])
+            threads = adapter.list_threads(account["email"], label="inbox", max_results=limit)
             for t in threads:
                 items.append(
                     InboxItem(
@@ -152,6 +156,8 @@ def get_unified_inbox(limit: int = 20) -> list[InboxItem]:
                         item_id=t["id"],
                     )
                 )
+        except ValueError:
+            continue
 
     signal_accounts = accts_module.list_accounts("messaging")
     for account in signal_accounts:
@@ -175,20 +181,22 @@ def get_unified_inbox(limit: int = 20) -> list[InboxItem]:
 
 
 def fetch_thread(thread_id: str, email: str | None) -> list[dict]:
-    account = _require_gmail_account(email)
-    messages = gmail.fetch_thread_messages(thread_id, account["email"])
+    account = _resolve_email_account(email)
+    adapter = _get_email_adapter(account["provider"])
+    messages = adapter.fetch_thread_messages(thread_id, account["email"])
     if not messages:
         raise ValueError(f"Thread not found: {thread_id}")
     return messages
 
 
 def resolve_thread_id(prefix: str, email: str | None) -> str | None:
-    account = _require_gmail_account(email)
+    account = _resolve_email_account(email)
+    adapter = _get_email_adapter(account["provider"])
     if len(prefix) >= 16:
         return prefix
 
-    threads = gmail.list_threads(account["email"], label="inbox", max_results=100)
-    threads += gmail.list_threads(account["email"], label="unread", max_results=100)
+    threads = adapter.list_threads(account["email"], label="inbox", max_results=100)
+    threads += adapter.list_threads(account["email"], label="unread", max_results=100)
     for thread in threads:
         if thread["id"].startswith(prefix):
             return thread["id"]
@@ -196,13 +204,26 @@ def resolve_thread_id(prefix: str, email: str | None) -> str | None:
 
 
 def thread_action(action: str, thread_id: str, email: str | None) -> None:
-    account = _require_gmail_account(email)
-    action_fn = _thread_action_map().get(action)
+    account = _resolve_email_account(email)
+    adapter = _get_email_adapter(account["provider"])
+    action_fn = _get_thread_action(adapter, action)
     if not action_fn:
         raise ValueError(f"Unknown action: {action}")
     success = action_fn(thread_id, account["email"])
     if not success:
         raise ValueError(f"Failed to {action} thread")
+
+
+def _get_thread_action(adapter, action: str):
+    action_map = {
+        "archive": adapter.archive_thread,
+        "delete": adapter.delete_thread,
+        "flag": adapter.flag_thread,
+        "unflag": adapter.unflag_thread,
+        "unarchive": adapter.unarchive_thread,
+        "undelete": adapter.undelete_thread,
+    }
+    return action_map.get(action)
 
 
 def execute_approved_proposals() -> list[ProposalExecution]:
@@ -249,17 +270,6 @@ def execute_approved_proposals() -> list[ProposalExecution]:
             )
 
     return results
-
-
-def _thread_action_map():
-    return {
-        "archive": gmail.archive_thread,
-        "delete": gmail.delete_thread,
-        "flag": gmail.flag_thread,
-        "unflag": gmail.unflag_thread,
-        "unarchive": gmail.unarchive_thread,
-        "undelete": gmail.undelete_thread,
-    }
 
 
 def _execute_signal_action(action: str, message_id: str) -> None:
