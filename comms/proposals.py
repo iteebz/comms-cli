@@ -80,23 +80,28 @@ def create_proposal(
     agent_reasoning: str | None = None,
     email: str | None = None,
     skip_validation: bool = False,
-) -> tuple[str | None, str]:
+) -> tuple[str | None, str, bool]:
+    from . import learning
+
     if not skip_validation:
         valid_action, msg = _validate_action(entity_type, proposed_action)
         if not valid_action:
-            return None, msg
+            return None, msg, False
 
         valid_entity, msg = _validate_entity(entity_type, entity_id, email)
         if not valid_entity:
-            return None, msg
+            return None, msg, False
+
+    auto_approved = learning.should_auto_approve(proposed_action)
+    status = "approved" if auto_approved else "pending"
 
     proposal_id = str(uuid.uuid4())
 
     with get_db() as conn:
         conn.execute(
             """
-            INSERT INTO proposals (id, entity_type, entity_id, proposed_action, agent_reasoning, email, proposed_at, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO proposals (id, entity_type, entity_id, proposed_action, agent_reasoning, email, proposed_at, status, approved_at, approved_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 proposal_id,
@@ -106,11 +111,23 @@ def create_proposal(
                 agent_reasoning,
                 email,
                 now_iso(),
-                "pending",
+                status,
+                now_iso() if auto_approved else None,
+                "auto" if auto_approved else None,
             ),
         )
 
-    return proposal_id, ""
+    if auto_approved:
+        audit.log_decision(
+            proposed_action=proposed_action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            user_decision="auto_approved",
+            reasoning="Confidence threshold met",
+            metadata={"proposal_id": proposal_id, "agent_reasoning": agent_reasoning},
+        )
+
+    return proposal_id, "", auto_approved
 
 
 def get_proposal(proposal_id: str) -> dict | None:

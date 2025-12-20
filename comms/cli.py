@@ -90,6 +90,44 @@ def status():
     typer.echo(f"  Allowed recipients: {len(pol.get('allowed_recipients', []))}")
     typer.echo(f"  Allowed domains: {len(pol.get('allowed_domains', []))}")
 
+    auto = pol.get("auto_approve", {})
+    typer.echo("\nAuto-approve:")
+    typer.echo(f"  Enabled: {auto.get('enabled', False)}")
+    typer.echo(f"  Threshold: {auto.get('threshold', 0.95):.0%}")
+    typer.echo(f"  Min samples: {auto.get('min_samples', 10)}")
+    typer.echo(f"  Actions: {auto.get('actions', []) or 'all'}")
+
+
+@app.command()
+def auto_approve(
+    enable: bool = typer.Option(None, "--enable/--disable", help="Enable or disable"),
+    threshold: float = typer.Option(None, "--threshold", "-t", help="Accuracy threshold"),
+    min_samples: int = typer.Option(None, "--min-samples", "-n", help="Minimum samples"),
+    action: list[str] | None = None,
+):
+    """Configure auto-approve settings"""
+    from .config import get_policy, set_policy
+
+    pol = get_policy()
+    auto = pol.get("auto_approve", {})
+
+    if enable is not None:
+        auto["enabled"] = enable
+    if threshold is not None:
+        auto["threshold"] = threshold
+    if min_samples is not None:
+        auto["min_samples"] = min_samples
+    if action:
+        auto["actions"] = list(action)
+
+    pol["auto_approve"] = auto
+    set_policy(pol)
+
+    typer.echo(f"Auto-approve: {'enabled' if auto.get('enabled') else 'disabled'}")
+    typer.echo(f"  Threshold: {auto.get('threshold', 0.95):.0%}")
+    typer.echo(f"  Min samples: {auto.get('min_samples', 10)}")
+    typer.echo(f"  Actions: {auto.get('actions', []) or 'all'}")
+
 
 @app.command()
 def drafts_list():
@@ -663,7 +701,7 @@ def propose(
     agent: str = typer.Option(None, "--agent", help="Agent reasoning"),
 ):
     """Create proposal"""
-    proposal_id, error = proposals.create_proposal(
+    proposal_id, error, auto_approved = proposals.create_proposal(
         entity_type=entity_type,
         entity_id=entity_id,
         proposed_action=action,
@@ -671,7 +709,10 @@ def propose(
     )
 
     if proposal_id:
-        typer.echo(f"Created proposal {proposal_id[:8]}")
+        if auto_approved:
+            typer.echo(f"Auto-approved proposal {proposal_id[:8]} (high confidence)")
+        else:
+            typer.echo(f"Created proposal {proposal_id[:8]}")
     else:
         typer.echo(f"Failed to create proposal: {error}")
         raise typer.Exit(1)

@@ -69,6 +69,12 @@ def get_policy():
             "allowed_domains": [],
             "require_approval": True,
             "max_daily_sends": 50,
+            "auto_approve": {
+                "enabled": False,
+                "threshold": 0.95,
+                "min_samples": 10,
+                "actions": [],
+            },
         },
     )
 

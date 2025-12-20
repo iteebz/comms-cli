@@ -97,3 +97,27 @@ def suggest_auto_approve(threshold: float = 0.95, min_samples: int = 10) -> list
         if s.total >= min_samples and s.accuracy >= threshold:
             suggestions.append(action)
     return suggestions
+
+
+def should_auto_approve(action: str) -> bool:
+    from .config import get_policy
+
+    policy = get_policy()
+    auto = policy.get("auto_approve", {})
+
+    if not auto.get("enabled", False):
+        return False
+
+    allowed_actions = auto.get("actions", [])
+    if allowed_actions and action not in allowed_actions:
+        return False
+
+    threshold = auto.get("threshold", 0.95)
+    min_samples = auto.get("min_samples", 10)
+
+    stats = get_decision_stats()
+    if action not in stats:
+        return False
+
+    s = stats[action]
+    return s.total >= min_samples and s.accuracy >= threshold
