@@ -189,6 +189,33 @@ def stats():
 
 
 @app.command()
+def senders(limit: int = typer.Option(20, "--limit", "-n")):
+    """Show sender statistics and priority scores"""
+    from .. import sender_stats
+
+    top = sender_stats.get_top_senders(limit=limit)
+    if not top:
+        typer.echo("No sender data yet")
+        return
+
+    typer.echo("Top Senders:")
+    for s in top:
+        resp = f"{s.response_rate:.0%}" if s.received_count > 0 else "n/a"
+        pattern = ""
+        if s.deleted_count > s.replied_count:
+            pattern = "→delete"
+        elif s.archived_count > s.replied_count:
+            pattern = "→archive"
+        elif s.replied_count > 0:
+            pattern = "→reply"
+
+        typer.echo(
+            f"  {s.sender[:30]:30} | recv:{s.received_count:3} resp:{resp:4} "
+            f"pri:{s.priority_score:.2f} {pattern}"
+        )
+
+
+@app.command()
 def audit_log(limit: int = 20):
     """Show recent audit log"""
     from .. import audit

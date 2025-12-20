@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from .config import RULES_PATH
 from .contacts import format_contacts_for_prompt
 from .patterns import detect_urgency, should_skip_triage
+from .sender_stats import format_sender_context_for_prompt
 from .services import InboxItem, get_unified_inbox
 
 
@@ -28,18 +29,25 @@ def _load_rules() -> str:
 
 def _build_prompt(items: list[InboxItem], rules: str) -> str:
     items_json = []
+    sender_histories = []
+
     for item in items:
-        items_json.append(
-            {
-                "id": item.item_id[:8],
-                "source": item.source,
-                "sender": item.sender,
-                "preview": item.preview,
-                "unread": item.unread,
-            }
-        )
+        item_data = {
+            "id": item.item_id[:8],
+            "source": item.source,
+            "sender": item.sender,
+            "preview": item.preview,
+            "unread": item.unread,
+        }
+
+        sender_ctx = format_sender_context_for_prompt(item.sender)
+        if sender_ctx:
+            sender_histories.append(sender_ctx)
+
+        items_json.append(item_data)
 
     contacts = format_contacts_for_prompt()
+    histories = "\n\n".join(sender_histories) if sender_histories else ""
 
     return f"""You are triaging a communications inbox. Analyze each item and propose an action.
 
@@ -47,6 +55,8 @@ RULES (user preferences):
 {rules or "No rules configured. Use sensible defaults."}
 
 {contacts}
+
+{histories}
 
 VALID ACTIONS:
 - For email: archive, delete, flag, ignore

@@ -126,6 +126,8 @@ def reply_to_thread(
 
 
 def send_draft(draft_id: str) -> None:
+    from . import sender_stats
+
     d = drafts.get_draft(draft_id)
     if not d:
         raise ValueError(f"Draft {draft_id} not found")
@@ -149,6 +151,9 @@ def send_draft(draft_id: str) -> None:
         raise ValueError("Failed to send")
 
     drafts.mark_sent(draft_id)
+
+    if d.to_addr:
+        sender_stats.record_action(d.to_addr, "reply")
 
 
 def list_threads(label: str) -> list[dict]:
@@ -243,14 +248,29 @@ def resolve_thread_id(prefix: str, email: str | None) -> str | None:
 
 
 def thread_action(action: str, thread_id: str, email: str | None) -> None:
+    from . import sender_stats
+
     account = _resolve_email_account(email)
     adapter = _get_email_adapter(account["provider"])
     action_fn = _get_thread_action(adapter, action)
     if not action_fn:
         raise ValueError(f"Unknown action: {action}")
+
+    sender = None
+    if action in ("archive", "delete", "flag"):
+        try:
+            messages = adapter.fetch_thread_messages(thread_id, account["email"])
+            if messages:
+                sender = messages[-1].get("from", "")
+        except Exception:
+            pass
+
     success = action_fn(thread_id, account["email"])
     if not success:
         raise ValueError(f"Failed to {action} thread")
+
+    if sender and action in ("archive", "delete", "flag"):
+        sender_stats.record_action(sender, action)
 
 
 def _get_thread_action(adapter, action: str):
