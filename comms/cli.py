@@ -3,7 +3,7 @@ from datetime import datetime
 import typer
 
 from . import accounts as accts_module
-from . import audit, db, drafts, policy, proposals
+from . import audit, db, drafts, policy, proposals, services
 from .adapters.email import gmail, outlook, proton
 from .adapters.messaging import signal
 
@@ -15,30 +15,12 @@ app = typer.Typer(
 )
 
 
-THREAD_ACTIONS = {
-    "archive": gmail.archive_thread,
-    "delete": gmail.delete_thread,
-    "flag": gmail.flag_thread,
-    "unflag": gmail.unflag_thread,
-    "unarchive": gmail.unarchive_thread,
-    "undelete": gmail.undelete_thread,
-}
-
-
-def _resolve_email_account(email: str | None) -> dict:
-    account, error = accts_module.select_email_account(email)
-    if account:
-        return account
-    typer.echo(error or "No email account found")
-    raise typer.Exit(1)
-
-
-def _require_gmail_account(email: str | None) -> dict:
-    account = _resolve_email_account(email)
-    if account["provider"] != "gmail":
-        typer.echo(f"Provider {account['provider']} not supported for this command")
-        raise typer.Exit(1)
-    return account
+def _run_service(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except ValueError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(1) from None
 
 
 @app.callback(invoke_without_command=True)
@@ -159,20 +141,17 @@ def compose(
         typer.echo("Error: --body required")
         raise typer.Exit(1)
 
-    account = _resolve_email_account(email)
-    email = account["email"]
-
-    draft_id = drafts.create_draft(
+    draft_id, from_addr = _run_service(
+        services.compose_email_draft,
         to_addr=to,
-        subject=subject or "(no subject)",
+        subject=subject,
         body=body,
         cc_addr=cc,
-        from_account_id=account["id"],
-        from_addr=email,
+        email=email,
     )
 
     typer.echo(f"Created draft {draft_id[:8]}")
-    typer.echo(f"From: {email}")
+    typer.echo(f"From: {from_addr}")
     typer.echo(f"To: {to}")
     if cc:
         typer.echo(f"Cc: {cc}")
@@ -214,29 +193,8 @@ def reply(
         typer.echo("Error: --body required")
         raise typer.Exit(1)
 
-    account = _require_gmail_account(email)
-    email = account["email"]
-
-    messages = gmail.fetch_thread_messages(thread_id, email)
-
-    if not messages:
-        typer.echo(f"Thread not found: {thread_id}")
-        raise typer.Exit(1)
-
-    original_subject = messages[0]["subject"]
-    reply_subject = (
-        original_subject if original_subject.startswith("Re: ") else f"Re: {original_subject}"
-    )
-
-    original_from = messages[-1]["from"]
-
-    draft_id = drafts.create_draft(
-        to_addr=original_from,
-        subject=reply_subject,
-        body=body,
-        thread_id=thread_id,
-        from_account_id=account["id"],
-        from_addr=email,
+    draft_id, original_from, reply_subject = _run_service(
+        services.reply_to_thread, thread_id=thread_id, body=body, email=email
     )
 
     typer.echo(f"Created reply draft {draft_id[:8]}")
@@ -254,38 +212,9 @@ def send(draft_id: str):
         typer.echo(f"Draft {draft_id} not found")
         raise typer.Exit(1)
 
-    if not d.approved_at:
-        typer.echo("Draft not approved. Run `comms approve` first.")
-        raise typer.Exit(1)
-
-    if d.sent_at:
-        typer.echo("Draft already sent")
-        return
-
-    if not d.from_account_id or not d.from_addr:
-        typer.echo("Draft missing source account info")
-        raise typer.Exit(1)
-
-    account = accts_module.get_account_by_id(d.from_account_id)
-    if not account:
-        typer.echo(f"Account not found: {d.from_account_id}")
-        raise typer.Exit(1)
-
-    email = d.from_addr
-
-    if account["provider"] == "gmail":
-        success = gmail.send_message(account["id"], email, d)
-    else:
-        typer.echo(f"Provider {account['provider']} not yet implemented")
-        raise typer.Exit(1)
-
-    if success:
-        drafts.mark_sent(full_id)
-        typer.echo(f"Sent: {d.to_addr}")
-        typer.echo(f"Subject: {d.subject}")
-    else:
-        typer.echo("Failed to send")
-        raise typer.Exit(1)
+    _run_service(services.send_draft, full_id)
+    typer.echo(f"Sent: {d.to_addr}")
+    typer.echo(f"Subject: {d.subject}")
 
 
 @app.command()
@@ -566,45 +495,25 @@ def threads(
     ),
 ):
     """List threads from all accounts"""
-    accounts = accts_module.list_accounts("email")
+    for entry in services.list_threads(label):
+        account = entry["account"]
+        threads = entry["threads"]
+        typer.echo(f"\n{account['email']} ({label}):")
 
-    for account in accounts:
-        if account["provider"] == "gmail":
-            typer.echo(f"\n{account['email']} ({label}):")
-            threads = gmail.list_threads(account["email"], label=label)
+        if not threads:
+            typer.echo("  No threads")
+            continue
 
-            if not threads:
-                typer.echo("  No threads")
-                continue
-
-            for t in threads:
-                date_str = t.get("date", "")[:16]  # "Mon, 7 Jul 2025"
-                typer.echo(f"  {t['id'][:8]} | {date_str:16} | {t['snippet'][:50]}")
-
-
-def _resolve_thread_id(prefix: str, email: str) -> str | None:
-    if len(prefix) >= 16:
-        return prefix
-    threads = gmail.list_threads(email, label="inbox", max_results=100)
-    threads += gmail.list_threads(email, label="unread", max_results=100)
-    for t in threads:
-        if t["id"].startswith(prefix):
-            return t["id"]
-    return None
+        for t in threads:
+            date_str = t.get("date", "")[:16]  # "Mon, 7 Jul 2025"
+            typer.echo(f"  {t['id'][:8]} | {date_str:16} | {t['snippet'][:50]}")
 
 
 @app.command()
 def thread(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Fetch and display full thread"""
-    account = _require_gmail_account(email)
-    email = account["email"]
-
-    full_id = _resolve_thread_id(thread_id, email) or thread_id
-    messages = gmail.fetch_thread_messages(full_id, email)
-
-    if not messages:
-        typer.echo(f"Thread not found: {thread_id}")
-        raise typer.Exit(1)
+    full_id = _run_service(services.resolve_thread_id, thread_id, email) or thread_id
+    messages = _run_service(services.fetch_thread, full_id, email)
 
     typer.echo(f"\nThread: {messages[0]['subject']}")
     typer.echo("=" * 80)
@@ -619,73 +528,50 @@ def thread(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
 @app.command()
 def archive(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Archive thread (remove from inbox)"""
-    account = _require_gmail_account(email)
-    email = account["email"]
-
-    success = gmail.archive_thread(thread_id, email)
-
-    if success:
-        typer.echo(f"Archived thread: {thread_id}")
-        audit.log("archive", "thread", thread_id, {"reason": "manual"})
-    else:
-        typer.echo("Failed to archive thread")
-        raise typer.Exit(1)
+    _run_service(services.thread_action, "archive", thread_id, email)
+    typer.echo(f"Archived thread: {thread_id}")
+    audit.log("archive", "thread", thread_id, {"reason": "manual"})
 
 
 @app.command()
 def delete(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Delete thread (move to trash)"""
-    account = _require_gmail_account(email)
-    email = account["email"]
-
-    success = gmail.delete_thread(thread_id, email)
-
-    if success:
-        typer.echo(f"Deleted thread: {thread_id}")
-        audit.log("delete", "thread", thread_id, {"reason": "manual"})
-    else:
-        typer.echo("Failed to delete thread")
-        raise typer.Exit(1)
+    _run_service(services.thread_action, "delete", thread_id, email)
+    typer.echo(f"Deleted thread: {thread_id}")
+    audit.log("delete", "thread", thread_id, {"reason": "manual"})
 
 
 @app.command()
 def flag(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Flag thread (star it)"""
-    _thread_action(thread_id, "flag", gmail.flag_thread, email)
+    _thread_action(thread_id, "flag", email)
 
 
 @app.command()
 def unflag(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Unflag thread (unstar it)"""
-    _thread_action(thread_id, "unflag", gmail.unflag_thread, email)
+    _thread_action(thread_id, "unflag", email)
 
 
 @app.command()
 def unarchive(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Unarchive thread (restore to inbox)"""
-    _thread_action(thread_id, "unarchive", gmail.unarchive_thread, email)
+    _thread_action(thread_id, "unarchive", email)
 
 
 @app.command()
 def undelete(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Undelete thread (restore from trash)"""
-    _thread_action(thread_id, "undelete", gmail.undelete_thread, email)
+    _thread_action(thread_id, "undelete", email)
 
 
-def _thread_action(thread_id: str, action_name: str, action_fn, email: str = None):
+def _thread_action(thread_id: str, action_name: str, email: str | None = None):
     """Helper to execute thread actions with audit logging"""
-    account = _require_gmail_account(email)
-    email = account["email"]
+    _run_service(services.thread_action, action_name, thread_id, email)
 
-    success = action_fn(thread_id, email)
-
-    if success:
-        past_tense = f"{action_name}ged" if action_name.endswith("flag") else f"{action_name}d"
-        typer.echo(f"{past_tense.capitalize()} thread: {thread_id}")
-        audit.log(action_name, "thread", thread_id, {"reason": "manual"})
-    else:
-        typer.echo(f"Failed to {action_name} thread")
-        raise typer.Exit(1)
+    past_tense = f"{action_name}ged" if action_name.endswith("flag") else f"{action_name}d"
+    typer.echo(f"{past_tense.capitalize()} thread: {thread_id}")
+    audit.log(action_name, "thread", thread_id, {"reason": "manual"})
 
 
 @app.command()
@@ -778,50 +664,22 @@ def reject(
 def resolve():
     """Execute all approved proposals"""
     approved = proposals.get_approved_proposals()
-
     if not approved:
         typer.echo("No approved proposals to execute")
         return
 
+    results = services.execute_approved_proposals()
+
     executed_count = 0
     failed_count = 0
-
-    for p in approved:
-        action = p["proposed_action"]
-        entity_type = p["entity_type"]
-        entity_id = p["entity_id"]
-        email = p.get("email")
-
-        typer.echo(f"Executing: {action} {entity_type} {entity_id[:8]}")
-
-        try:
-            if entity_type == "thread":
-                if not email:
-                    account = _resolve_email_account(None)
-                    email = account["email"]
-
-                action_fn = THREAD_ACTIONS.get(action)
-                if not action_fn:
-                    typer.echo(f"  Unknown action: {action}")
-                    failed_count += 1
-                    continue
-
-                success = action_fn(entity_id, email)
-
-                if success:
-                    proposals.mark_executed(p["id"])
-                    executed_count += 1
-                    typer.echo(f"  ✓ {action} completed")
-                else:
-                    typer.echo(f"  ✗ {action} failed")
-                    failed_count += 1
-            else:
-                typer.echo(f"  Unknown entity type: {entity_type}")
-                failed_count += 1
-
-        except Exception as e:
-            typer.echo(f"  ✗ Error: {e}")
+    for result in results:
+        typer.echo(f"Executing: {result.action} {result.entity_type} {result.entity_id[:8]}")
+        if result.success:
+            executed_count += 1
+            typer.echo(f"  ✓ {result.action} completed")
+        else:
             failed_count += 1
+            typer.echo(f"  ✗ {result.error}")
 
     typer.echo(f"\nExecuted: {executed_count}, Failed: {failed_count}")
 
