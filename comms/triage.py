@@ -7,6 +7,7 @@ import subprocess
 from dataclasses import dataclass
 
 from .config import RULES_PATH
+from .contacts import format_contacts_for_prompt
 from .services import InboxItem, get_unified_inbox
 
 
@@ -37,10 +38,14 @@ def _build_prompt(items: list[InboxItem], rules: str) -> str:
             }
         )
 
+    contacts = format_contacts_for_prompt()
+
     return f"""You are triaging a communications inbox. Analyze each item and propose an action.
 
 RULES (user preferences):
 {rules or "No rules configured. Use sensible defaults."}
+
+{contacts}
 
 VALID ACTIONS:
 - For email: archive, delete, flag, ignore

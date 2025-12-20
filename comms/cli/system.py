@@ -82,6 +82,34 @@ def rules():
 
 
 @app.command()
+def contacts():
+    """Show contact notes (edit at ~/.comms/contacts.md)"""
+    from ..contacts import CONTACTS_PATH, get_all_contacts
+
+    if not CONTACTS_PATH.exists():
+        typer.echo(f"No contacts file. Create one at: {CONTACTS_PATH}")
+        typer.echo("\nExample format:")
+        typer.echo("## boss@company.com")
+        typer.echo("tags: important, work")
+        typer.echo("Always respond promptly. CC their assistant on big decisions.")
+        typer.echo("\n## *@newsletter.com")
+        typer.echo("tags: newsletter")
+        typer.echo("Archive without reading.")
+        return
+
+    all_contacts = get_all_contacts()
+    if not all_contacts:
+        typer.echo(f"Contacts file empty. Edit at: {CONTACTS_PATH}")
+        return
+
+    for c in all_contacts:
+        tags = f" [{', '.join(c.tags)}]" if c.tags else ""
+        typer.echo(f"{c.pattern}{tags}")
+        typer.echo(f"  {c.notes}")
+        typer.echo()
+
+
+@app.command()
 def status():
     """Show system status"""
     from ..config import get_policy

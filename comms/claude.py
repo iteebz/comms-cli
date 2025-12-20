@@ -2,6 +2,15 @@
 
 import subprocess
 
+from .contacts import get_contact_context
+
+
+def _extract_sender_from_context(context: str) -> str:
+    for line in context.split("\n"):
+        if line.startswith("From:"):
+            return line[5:].strip()
+    return ""
+
 
 def generate_reply(
     thread_context: str,
@@ -12,11 +21,18 @@ def generate_reply(
 
     Returns (draft_body, reasoning).
     """
+    sender = _extract_sender_from_context(thread_context)
+    contact = get_contact_context(sender) if sender else None
+    contact_info = ""
+    if contact:
+        tags = f" [{', '.join(contact.tags)}]" if contact.tags else ""
+        contact_info = f"\nCONTACT NOTES{tags}: {contact.notes}"
+
     prompt = f"""You are drafting an email reply. Be concise and professional.
 
 THREAD CONTEXT:
 {thread_context}
-
+{contact_info}
 {f"INSTRUCTIONS: {instructions}" if instructions else ""}
 
 OUTPUT FORMAT:
@@ -71,18 +87,26 @@ def generate_signal_reply(
     Returns (reply_text, reasoning).
     """
     context_lines = []
+    last_sender = ""
     for msg in conversation[-10:]:
         sender = msg.get("sender_name") or msg.get("sender_phone", "Unknown")
+        last_sender = sender
         body = msg.get("body", "")
         context_lines.append(f"{sender}: {body}")
 
     context = "\n".join(context_lines)
 
+    contact = get_contact_context(last_sender) if last_sender else None
+    contact_info = ""
+    if contact:
+        tags = f" [{', '.join(contact.tags)}]" if contact.tags else ""
+        contact_info = f"\nCONTACT NOTES{tags}: {contact.notes}"
+
     prompt = f"""You are replying to a Signal message. Be casual and brief.
 
 CONVERSATION:
 {context}
-
+{contact_info}
 {f"INSTRUCTIONS: {instructions}" if instructions else ""}
 
 OUTPUT FORMAT:
