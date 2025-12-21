@@ -52,7 +52,6 @@ comms signal-history +123...  # Message history
 - ✅ Audit logging
 
 **Not done:**
-- Outlook/Proton adapters
 - Draft generation
 - Auto-approve based on confidence
 

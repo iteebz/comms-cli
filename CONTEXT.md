@@ -41,7 +41,6 @@ CLI tool for AI-mediated communication. Target user has ADHD—messages pile up 
 - `comms agent-config --nlp` to enable
 
 **Not done:**
-- Proton adapter (requires paid Bridge)
 - Calendar integration
 - Voice memos → transcribed drafts
 

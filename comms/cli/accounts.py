@@ -3,7 +3,7 @@
 import typer
 
 from .. import accounts as accts_module
-from ..adapters.email import gmail, outlook, proton
+from ..adapters.email import gmail, outlook
 from ..adapters.messaging import signal
 
 app = typer.Typer()
@@ -11,12 +11,9 @@ app = typer.Typer()
 
 @app.command()
 def link(
-    provider: str = typer.Argument(..., help="Provider: gmail, outlook, proton, signal"),
+    provider: str = typer.Argument(..., help="Provider: gmail, outlook, signal"),
     identifier: str = typer.Argument(
         None, help="Email or phone number (e.g., +1234567890 for Signal)"
-    ),
-    password: str = typer.Option(
-        None, "--password", "-p", help="Password (Proton Bridge password)"
     ),
     client_id: str = typer.Option(None, "--client-id", help="OAuth Client ID (Outlook)"),
     client_secret: str = typer.Option(
@@ -24,7 +21,7 @@ def link(
     ),
 ):
     """Link email or messaging account"""
-    if provider not in ["proton", "gmail", "outlook", "signal"]:
+    if provider not in ["gmail", "outlook", "signal"]:
         typer.echo(f"Unknown provider: {provider}")
         raise typer.Exit(1)
 
@@ -68,21 +65,6 @@ def link(
 
         account_id = accts_module.add_email_account(provider, email)
         success, msg = gmail.test_connection(account_id, email)
-        if not success:
-            typer.echo(f"Failed to connect: {msg}")
-            raise typer.Exit(1)
-
-    elif provider == "proton":
-        if not email:
-            typer.echo("Proton requires email address")
-            raise typer.Exit(1)
-
-        if not password:
-            password = typer.prompt("Proton Bridge Password", hide_input=True)
-
-        account_id = accts_module.add_email_account(provider, email)
-        proton.store_credentials(email, password)
-        success, msg = proton.test_connection(account_id, email)
         if not success:
             typer.echo(f"Failed to connect: {msg}")
             raise typer.Exit(1)
