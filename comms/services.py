@@ -126,7 +126,7 @@ def reply_to_thread(
 
 
 def send_draft(draft_id: str) -> None:
-    from . import sender_stats
+    from . import senders
 
     d = drafts.get_draft(draft_id)
     if not d:
@@ -153,7 +153,7 @@ def send_draft(draft_id: str) -> None:
     drafts.mark_sent(draft_id)
 
     if d.to_addr:
-        sender_stats.record_action(d.to_addr, "reply")
+        senders.record_action(d.to_addr, "reply")
 
 
 def list_threads(label: str) -> list[dict]:
@@ -174,6 +174,7 @@ class InboxItem:
     source: str
     source_id: str
     sender: str
+    subject: str
     preview: str
     timestamp: int
     unread: bool
@@ -194,6 +195,7 @@ def get_unified_inbox(limit: int = 20) -> list[InboxItem]:
                         source="email",
                         source_id=account["email"],
                         sender=t.get("from", "Unknown"),
+                        subject=t.get("subject", ""),
                         preview=t.get("snippet", "")[:60],
                         timestamp=t.get("timestamp", 0),
                         unread="UNREAD" in t.get("labels", []),
@@ -213,6 +215,7 @@ def get_unified_inbox(limit: int = 20) -> list[InboxItem]:
                         source="signal",
                         source_id=account["email"],
                         sender=m.get("sender_name") or m.get("sender_phone", "Unknown"),
+                        subject="",
                         preview=m.get("body", "")[:60],
                         timestamp=m.get("timestamp", 0),
                         unread=m.get("read_at") is None,
@@ -248,7 +251,7 @@ def resolve_thread_id(prefix: str, email: str | None) -> str | None:
 
 
 def thread_action(action: str, thread_id: str, email: str | None) -> None:
-    from . import sender_stats
+    from . import senders
 
     account = _resolve_email_account(email)
     adapter = _get_email_adapter(account["provider"])
@@ -270,7 +273,7 @@ def thread_action(action: str, thread_id: str, email: str | None) -> None:
         raise ValueError(f"Failed to {action} thread")
 
     if sender and action in ("archive", "delete", "flag"):
-        sender_stats.record_action(sender, action)
+        senders.record_action(sender, action)
 
 
 def _get_thread_action(adapter, action: str):

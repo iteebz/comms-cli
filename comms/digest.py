@@ -29,7 +29,6 @@ def get_digest(days: int = 7) -> DigestStats:
     end = datetime.now()
     start = end - timedelta(days=days)
     start_iso = start.isoformat()
-    end.isoformat()
 
     with db.get_db() as conn:
         drafts_created = conn.execute(
@@ -46,7 +45,7 @@ def get_digest(days: int = 7) -> DigestStats:
         ).fetchone()[0]
 
         proposals_rejected = conn.execute(
-            "SELECT COUNT(*) FROM proposals WHERE approved_at >= ? AND status = 'rejected'",
+            "SELECT COUNT(*) FROM proposals WHERE rejected_at >= ?",
             (start_iso,),
         ).fetchone()[0]
 
@@ -63,9 +62,7 @@ def get_digest(days: int = 7) -> DigestStats:
 
         sender_rows = conn.execute(
             """SELECT sender, received_count FROM sender_stats
-            WHERE updated_at >= ?
             ORDER BY received_count DESC LIMIT 5""",
-            (start_iso,),
         ).fetchall()
 
         top_senders = [(row["sender"], row["received_count"]) for row in sender_rows]
@@ -108,7 +105,7 @@ def format_digest(stats: DigestStats) -> str:
 
     if stats.top_senders:
         lines.append("")
-        lines.append("Top senders:")
+        lines.append("Top senders (all time):")
         for sender, count in stats.top_senders:
             lines.append(f"  {sender[:30]:30} ({count})")
 

@@ -29,6 +29,7 @@ Attention scaffolding for ADHD brains. Not "AI email"—AI-mediated communicatio
 ## Stage 1 — Multi-Provider ✅
 
 - Gmail adapter (3 accounts, full flow)
+- Outlook adapter (Graph API)
 - Signal adapter (send, receive, reply, storage)
 - Signal daemon mode (background polling)
 - Unified triage for email + Signal
@@ -40,6 +41,7 @@ Attention scaffolding for ADHD brains. Not "AI email"—AI-mediated communicatio
 
 - Correction tracking in proposals
 - `comms stats` shows accuracy + patterns
+- Sender stats + priority scoring (`comms senders`)
 - Confidence calculation per action
 - Auto-approve high-confidence actions (configurable threshold)
 - `comms auto-approve --enable --threshold 0.95`
@@ -50,7 +52,9 @@ Attention scaffolding for ADHD brains. Not "AI email"—AI-mediated communicatio
 
 - Claude drafts email replies: `comms draft-reply <thread-id>`
 - Claude drafts Signal replies: `comms signal-draft <contact>`
+- Reply templates for common responses
 - Headless Claude via subprocess
+- Thread summarization: `comms summarize <thread-id>`
 
 ---
 
@@ -60,6 +64,9 @@ Attention scaffolding for ADHD brains. Not "AI email"—AI-mediated communicatio
 - Rules engine reads `~/.comms/rules.md`
 - Confidence thresholds for auto-create
 - Dry-run mode
+- Pattern-based auto-actions (noise + urgency)
+- Snooze + resurface support
+- One-command inbox clear: `comms clear`
 
 ---
 
@@ -90,7 +97,6 @@ comms-cli as the communication layer for agents:
 
 ## Stage 6 — Provider Expansion (next)
 
-- Outlook adapter (Graph API)
 - Calendar integration (propose meeting times)
 
 ---

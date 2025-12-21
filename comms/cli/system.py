@@ -212,9 +212,9 @@ def stats():
 @app.command()
 def senders(limit: int = typer.Option(20, "--limit", "-n")):
     """Show sender statistics and priority scores"""
-    from .. import sender_stats
+    from .. import senders
 
-    top = sender_stats.get_top_senders(limit=limit)
+    top = senders.get_top_senders(limit=limit)
     if not top:
         typer.echo("No sender data yet")
         return

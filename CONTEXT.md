@@ -6,11 +6,14 @@ CLI tool for AI-mediated communication. Target user has ADHD—messages pile up 
 
 ## Current state (2025-12-21)
 
-**Email (Gmail):**
+**Email (Gmail + Outlook):**
 - 3 accounts linked, OAuth2, stateless inbox
 - Full send flow: compose → approve → send
 - Thread actions: archive, delete, flag, unflag, unarchive, undelete
 - Claude drafts replies: `comms draft-reply <thread-id>`
+- Thread summarization: `comms summarize <thread-id>`
+- Snooze threads: `comms snooze <thread-id> --until monday`
+- Outlook adapter via Graph API (device flow + send/archive/delete/flag)
 
 **Signal:**
 - Linked as secondary device via signal-cli
@@ -28,6 +31,7 @@ CLI tool for AI-mediated communication. Target user has ADHD—messages pile up 
 - Correction tracking with pattern learning
 - `comms stats` shows accuracy + correction patterns
 - Auto-approve high-confidence actions
+- Pattern-based auto-actions for obvious noise + urgency
 
 **Agent Bus:**
 - Daemon responds to Signal commands
@@ -37,9 +41,9 @@ CLI tool for AI-mediated communication. Target user has ADHD—messages pile up 
 - `comms agent-config --nlp` to enable
 
 **Not done:**
-- Outlook adapter (stub exists)
 - Proton adapter (requires paid Bridge)
 - Calendar integration
+- Voice memos → transcribed drafts
 
 ## Architecture
 
@@ -60,6 +64,13 @@ CLI tool for AI-mediated communication. Target user has ADHD—messages pile up 
 **Signal storage:** Messages stored locally because signal-cli consumes on receive.
 
 **Keyring:** All credentials (OAuth tokens, passwords) in system keyring, never on disk.
+
+**Daily helpers:**
+- One-command inbox clear: `comms clear`
+- Weekly digest: `comms digest`
+- Sender stats: `comms senders`
+- Reply templates: `comms templates --init`
+- Contact notes for Claude: `comms contacts`
 
 ## Key flows
 
@@ -152,6 +163,9 @@ comms draft-reply <thread-id> [--instructions "..."]
 comms approve-draft <draft-id>
 comms send <draft-id>
 comms archive|delete|flag <thread-id>
+comms summarize <thread-id>
+comms snooze <thread-id> [--until monday]
+comms snoozed
 
 # Signal
 comms link signal        # QR code link
@@ -190,6 +204,11 @@ comms status
 comms auto-approve [--enable|--disable] [--threshold 0.95]
 comms audit-log
 comms stats              # learning stats
+comms senders            # sender stats + priority
+comms digest             # weekly activity digest
+comms templates [--init] # reply templates
+comms contacts           # contact notes
+comms clear              # triage → approve → execute
 ```
 
 ## Commit style
