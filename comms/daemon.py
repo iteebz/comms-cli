@@ -28,8 +28,8 @@ def _poll_once(phones: list[str], timeout: int = 1) -> int:
     from .config import get_agent_config
 
     agent_config = get_agent_config()
-    agent_enabled = agent_config.get("enabled", True)
-    use_nlp = agent_config.get("nlp", False)
+    agent_enabled = bool(agent_config.get("enabled", True))
+    use_nlp = bool(agent_config.get("nlp", False))
 
     total = 0
     for phone in phones:

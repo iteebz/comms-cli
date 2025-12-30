@@ -106,7 +106,7 @@ def signal_reply(
 
     success, result, original = signal_module.reply(phone, message_id, message)
 
-    if success:
+    if success and original:
         sender = original["sender_name"] or original["sender_phone"]
         typer.echo(f"Replied to {sender}")
         typer.echo(f"  Original: {original['body'][:50]}...")

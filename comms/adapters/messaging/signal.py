@@ -195,15 +195,16 @@ def link(device_name: str = "comms-cli") -> tuple[bool, str]:
     )
 
     uri = None
-    for line in iter(process.stdout.readline, ""):
-        line = line.strip()
-        if line.startswith("sgnl://") or line.startswith("tsdevice:"):
-            uri = line
-            break
+    if process.stdout:
+        for line in iter(process.stdout.readline, ""):
+            line = line.strip()
+            if line.startswith("sgnl://") or line.startswith("tsdevice:"):
+                uri = line
+                break
 
     if not uri:
         process.terminate()
-        stderr = process.stderr.read()
+        stderr = process.stderr.read() if process.stderr else ""
         return False, f"No device URI received. stderr: {stderr}"
 
     qr = qrcode.QRCode(border=1)
@@ -218,7 +219,7 @@ def link(device_name: str = "comms-cli") -> tuple[bool, str]:
         process.wait(timeout=120)
         if process.returncode == 0:
             return True, "Linked successfully"
-        return False, process.stderr.read() or "Link failed"
+        return False, (process.stderr.read() if process.stderr else "") or "Link failed"
     except subprocess.TimeoutExpired:
         process.terminate()
         return False, "Timeout waiting for scan"

@@ -19,7 +19,8 @@ def _validate_entity(entity_type: str, entity_id: str, email: str | None) -> tup
 
         try:
             if account["provider"] == "gmail":
-                messages = gmail.fetch_thread_messages(entity_id, email)
+                email_addr = account.get("email") or email or ""
+                messages = gmail.fetch_thread_messages(entity_id, email_addr)
                 if not messages:
                     return False, f"Thread {entity_id} not found"
                 return True, ""

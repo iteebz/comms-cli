@@ -10,8 +10,8 @@ BACKUP_DIR = Path.home() / ".comms_backups"
 
 
 class Config:
-    _instance = None
-    _data = None
+    _instance: "Config | None" = None
+    _data: dict = {}
 
     def __new__(cls):
         if cls._instance is None:
@@ -35,10 +35,10 @@ class Config:
         with open(CONFIG_PATH, "w") as f:
             yaml.dump(self._data, f, default_flow_style=False, allow_unicode=True)
 
-    def get(self, key, default=None):
+    def get(self, key: str, default=None):
         return self._data.get(key, default)
 
-    def set(self, key, value):
+    def set(self, key: str, value) -> None:
         self._data[key] = value
         self._save()
 
@@ -46,36 +46,39 @@ class Config:
 _config = Config()
 
 
-def get_accounts(service_type=None):
-    accounts = _config.get("accounts", {})
+def get_accounts(service_type: str | None = None) -> dict | list:
+    accounts: dict = _config.get("accounts", {}) or {}
     if service_type:
         return accounts.get(service_type, [])
     return accounts
 
 
-def add_account(service_type, account_data):
-    accounts = _config.get("accounts", {})
+def add_account(service_type: str, account_data: dict) -> None:
+    accounts: dict = _config.get("accounts", {}) or {}
     if service_type not in accounts:
         accounts[service_type] = []
     accounts[service_type].append(account_data)
     _config.set("accounts", accounts)
 
 
-def get_policy():
-    return _config.get(
-        "policy",
-        {
-            "allowed_recipients": [],
-            "allowed_domains": [],
-            "require_approval": True,
-            "max_daily_sends": 50,
-            "auto_approve": {
-                "enabled": False,
-                "threshold": 0.95,
-                "min_samples": 10,
-                "actions": [],
+def get_policy() -> dict:
+    return (
+        _config.get(
+            "policy",
+            {
+                "allowed_recipients": [],
+                "allowed_domains": [],
+                "require_approval": True,
+                "max_daily_sends": 50,
+                "auto_approve": {
+                    "enabled": False,
+                    "threshold": 0.95,
+                    "min_samples": 10,
+                    "actions": [],
+                },
             },
-        },
+        )
+        or {}
     )
 
 
@@ -83,13 +86,16 @@ def set_policy(policy):
     _config.set("policy", policy)
 
 
-def get_agent_config():
-    return _config.get(
-        "agent",
-        {
-            "enabled": True,
-            "nlp": False,
-        },
+def get_agent_config() -> dict:
+    return (
+        _config.get(
+            "agent",
+            {
+                "enabled": True,
+                "nlp": False,
+            },
+        )
+        or {}
     )
 
 

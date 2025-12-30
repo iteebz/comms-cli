@@ -139,10 +139,12 @@ def status():
     typer.echo("Policy:")
     typer.echo(f"  Require approval: {pol.get('require_approval', True)}")
     typer.echo(f"  Max daily sends: {pol.get('max_daily_sends', 50)}")
-    typer.echo(f"  Allowed recipients: {len(pol.get('allowed_recipients', []))}")
-    typer.echo(f"  Allowed domains: {len(pol.get('allowed_domains', []))}")
+    allowed_recipients: list = pol.get("allowed_recipients") or []
+    allowed_domains: list = pol.get("allowed_domains") or []
+    typer.echo(f"  Allowed recipients: {len(allowed_recipients)}")
+    typer.echo(f"  Allowed domains: {len(allowed_domains)}")
 
-    auto = pol.get("auto_approve", {})
+    auto: dict = pol.get("auto_approve") or {}
     typer.echo("\nAuto-approve:")
     typer.echo(f"  Enabled: {auto.get('enabled', False)}")
     typer.echo(f"  Threshold: {auto.get('threshold', 0.95):.0%}")
@@ -161,7 +163,7 @@ def auto_approve(
     from ..config import get_policy, set_policy
 
     pol = get_policy()
-    auto = pol.get("auto_approve", {})
+    auto: dict = pol.get("auto_approve") or {}
 
     if enable is not None:
         auto["enabled"] = enable

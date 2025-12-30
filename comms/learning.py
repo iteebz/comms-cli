@@ -103,7 +103,7 @@ def should_auto_approve(action: str) -> bool:
     from .config import get_policy
 
     policy = get_policy()
-    auto = policy.get("auto_approve", {})
+    auto: dict = policy.get("auto_approve", {})
 
     if not auto.get("enabled", False):
         return False

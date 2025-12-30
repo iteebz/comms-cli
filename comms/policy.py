@@ -6,8 +6,8 @@ from .db import get_db
 
 def check_recipient_allowed(recipient: str) -> tuple[bool, str]:
     policy = get_policy()
-    allowed_recipients = policy.get("allowed_recipients", [])
-    allowed_domains = policy.get("allowed_domains", [])
+    allowed_recipients: list[str] = policy.get("allowed_recipients", [])
+    allowed_domains: list[str] = policy.get("allowed_domains", [])
 
     if recipient in allowed_recipients:
         return True, "recipient allowlisted"
@@ -24,7 +24,7 @@ def check_recipient_allowed(recipient: str) -> tuple[bool, str]:
 
 def check_daily_send_limit() -> tuple[bool, str]:
     policy = get_policy()
-    max_daily = policy.get("max_daily_sends", 50)
+    max_daily: int = policy.get("max_daily_sends", 50)
 
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -41,7 +41,7 @@ def check_daily_send_limit() -> tuple[bool, str]:
 
 def requires_approval() -> bool:
     policy = get_policy()
-    return policy.get("require_approval", True)
+    return bool(policy.get("require_approval", True))
 
 
 def validate_send(draft_id: str, to_addr: str) -> tuple[bool, list[str]]:

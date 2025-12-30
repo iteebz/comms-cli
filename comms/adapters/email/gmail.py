@@ -92,7 +92,7 @@ def _get_credentials(email_addr: str | None = None) -> tuple[Credentials, str]:
         raise ValueError("Failed to get email from OAuth token")
 
     _set_token(email, json.loads(creds.to_json()))
-    return creds, email
+    return creds, email  # type: ignore[return-value]
 
 
 def test_connection(account_id: str, email_addr: str) -> tuple[bool, str]:

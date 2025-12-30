@@ -64,12 +64,12 @@ def _get_access_token(email: str) -> str | None:
                 _set_token_cache(email, cache.serialize())
             return result["access_token"]
 
-    flow = app.initiate_device_flow(scopes=SCOPES)
+    flow = app.initiate_device_flow(scopes=SCOPES)  # type: ignore[attr-defined]
     if "user_code" not in flow:
         return None
 
     print(flow["message"])
-    result = app.acquire_token_by_device_flow(flow)
+    result = app.acquire_token_by_device_flow(flow)  # type: ignore[attr-defined]
 
     if "access_token" in result:
         _set_token_cache(email, cache.serialize())

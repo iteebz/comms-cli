@@ -83,11 +83,11 @@ def record_action(sender: str, action: str, response_hours: float | None = None)
 
         if existing:
             update_parts = [f"{column} = {column} + 1", "last_action_at = ?", "updated_at = ?"]
-            params = [now, now]
+            params: list[str | float] = [now, now]
 
             if action == "reply" and response_hours is not None:
-                old_avg = existing["avg_response_hours"] or 0
-                old_count = existing["replied_count"] or 0
+                old_avg: float = existing["avg_response_hours"] or 0.0
+                old_count: int = existing["replied_count"] or 0
                 new_avg = ((old_avg * old_count) + response_hours) / (old_count + 1)
                 update_parts.append("avg_response_hours = ?")
                 params.append(new_avg)
