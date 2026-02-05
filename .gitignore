@@ -9,6 +9,5 @@ build/
 *.db-journal
 .comms/
 .life_backups/
-.ci.log
 *credentials.json
 *.json
