@@ -11,3 +11,4 @@ build/
 .life_backups/
 *credentials.json
 *.json
+.ci.log
