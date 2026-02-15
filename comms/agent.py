@@ -83,7 +83,7 @@ COMMAND_MAP = {
     "accounts": "comms accounts",
     "review": "comms review",
     "resolve": "comms resolve",
-    "drafts": "comms drafts",
+    "drafts": "comms drafts-list",
     "contacts": "comms contacts",
     "rules": "comms rules",
     "help": None,
@@ -104,7 +104,7 @@ AVAILABLE COMMANDS:
 - accounts: list accounts
 - review: show pending proposals
 - resolve: execute approved proposals
-- drafts: show pending drafts
+- drafts: list pending drafts
 - senders: show sender statistics
 - draft <thread_id>: generate reply draft for thread
 - approve <draft_id>: approve a draft
