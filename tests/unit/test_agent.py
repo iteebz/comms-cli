@@ -47,19 +47,19 @@ def test_remove_nonexistent_sender(temp_comms_dir):
     assert removed is False
 
 
-def test_is_command_exclamation():
-    assert agent.is_command("!inbox") is True
-    assert agent.is_command("! status") is True
-
-
-def test_is_command_prefix():
-    assert agent.is_command("comms inbox") is True
-    assert agent.is_command("COMMS status") is True
-
-
-def test_is_command_not():
-    assert agent.is_command("just a message") is False
-    assert agent.is_command("") is False
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("!inbox", True),
+        ("! status", True),
+        ("comms inbox", True),
+        ("COMMS status", True),
+        ("just a message", False),
+        ("", False),
+    ],
+)
+def test_is_command(text, expected):
+    assert agent.is_command(text) is expected
 
 
 def test_parse_command_exclamation():
