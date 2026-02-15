@@ -59,12 +59,13 @@ _CHECKS: list[tuple[str, Callable[[], CheckResult], int]] = [
 ]
 
 
-def score() -> dict[str, Any]:
+def score(checks: list[tuple[str, Callable[[], CheckResult], int]] | None = None) -> dict[str, Any]:
     results: dict[str, CheckResult] = {}
-    total_weight = sum(w for _, _, w in _CHECKS)
+    selected_checks = checks if checks is not None else _CHECKS
+    total_weight = sum(w for _, _, w in selected_checks)
     weighted_score = 0
 
-    for name, check_fn, weight in _CHECKS:
+    for name, check_fn, weight in selected_checks:
         result = check_fn()
         results[name] = result
         weighted_score += (result.score / 100) * weight

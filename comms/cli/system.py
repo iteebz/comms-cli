@@ -7,6 +7,7 @@ import typer
 from .. import accounts as accts_module
 from .. import db, services
 from ..adapters.email import gmail, outlook
+from ..health import score as health_score
 
 app = typer.Typer()
 
@@ -181,6 +182,18 @@ def auto_approve(
     typer.echo(f"  Threshold: {auto.get('threshold', 0.95):.0%}")
     typer.echo(f"  Min samples: {auto.get('min_samples', 10)}")
     typer.echo(f"  Actions: {auto.get('actions', []) or 'all'}")
+
+
+@app.command()
+def health():
+    """Run quick self-checks (CI, DB integrity, accounts)."""
+    result = health_score()
+    typer.echo(f"health: {result['score']}/100 {'✓' if result['ok'] else '✗'}")
+    for name, check in result["checks"].items():
+        status = "✓" if check["ok"] else "✗"
+        typer.echo(f"  {name}: {status} {check['detail']}")
+    if not result["ok"]:
+        raise typer.Exit(1)
 
 
 @app.command()

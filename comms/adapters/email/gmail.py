@@ -20,7 +20,7 @@ SCOPES = [
 ]
 SERVICE_NAME = "comms-cli/gmail"
 TOKEN_KEY_SUFFIX = "/token"
-CREDENTIALS_PATH = Path.home() / "space/repos/comms-cli/gmail_credentials.json"
+CREDENTIALS_PATH = Path.home() / ".comms" / "gmail_credentials.json"
 
 
 def _headers_map(headers: list[dict], lower: bool = True) -> dict:
