@@ -2,7 +2,7 @@ import uuid
 
 from . import accounts as accts_module
 from . import audit
-from .adapters.email import gmail
+from .adapters.email import gmail, outlook
 from .adapters.messaging import signal
 from .db import get_db, now_iso
 
@@ -18,13 +18,16 @@ def _validate_entity(entity_type: str, entity_id: str, email: str | None) -> tup
             return False, error or "No email account found"
 
         try:
+            email_addr = account.get("email") or email or ""
             if account["provider"] == "gmail":
-                email_addr = account.get("email") or email or ""
                 messages = gmail.fetch_thread_messages(entity_id, email_addr)
-                if not messages:
-                    return False, f"Thread {entity_id} not found"
-                return True, ""
-            return False, f"Provider {account['provider']} not supported for validation"
+            elif account["provider"] == "outlook":
+                messages = outlook.fetch_thread_messages(entity_id, email_addr)
+            else:
+                return False, f"Provider {account['provider']} not supported for validation"
+            if not messages:
+                return False, f"Thread {entity_id} not found"
+            return True, ""
         except Exception as e:
             return False, f"Failed to validate thread: {e}"
 
