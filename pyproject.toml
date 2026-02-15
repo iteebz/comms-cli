@@ -28,6 +28,7 @@ dependencies = [
 dev = [
     "ruff>=0.13.0",
     "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
     "pre-commit>=4.0.1",
     "pyright>=1.1.407",
 ]
@@ -71,6 +72,14 @@ ignore = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
+
+[tool.coverage.run]
+branch = true
+source = ["comms"]
+
+[tool.coverage.report]
+skip_covered = true
+show_missing = true
 
 [tool.pyright]
 pythonVersion = "3.12"

@@ -23,6 +23,12 @@ fix:
 test:
     @uv run pytest tests
 
+cov:
+    @uv run pytest tests --cov --cov-report=term-missing:skip-covered
+
+cov-accounts:
+    @uv run pytest tests/unit/test_accounts.py --cov=comms.accounts --cov-fail-under=80 --cov-report=term-missing:skip-covered
+
 clean:
     @rm -rf build/ dist/ *.egg-info .pytest_cache .ruff_cache __pycache__ .venv
     @find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
