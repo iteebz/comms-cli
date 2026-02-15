@@ -12,6 +12,8 @@ Claude reads your inbox, proposes actions, drafts replies. You approve. System e
 
 ## Install
 
+Requires: [Claude CLI](https://docs.anthropic.com/en/docs/claude-cli)
+
 ```bash
 uv sync
 comms init
