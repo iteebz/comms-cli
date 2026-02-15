@@ -15,18 +15,18 @@ def temp_daemon(tmp_path, monkeypatch):
     return {"pid_file": pid_file, "log_file": log_file}
 
 
-def test_get_pid_no_file(temp_daemon):
-    assert daemon.get_pid() is None
-
-
-def test_get_pid_valid(temp_daemon):
-    temp_daemon["pid_file"].write_text("12345")
-    assert daemon.get_pid() == 12345
-
-
-def test_get_pid_invalid(temp_daemon):
-    temp_daemon["pid_file"].write_text("not_a_number")
-    assert daemon.get_pid() is None
+@pytest.mark.parametrize(
+    "file_content,expected",
+    [
+        (None, None),
+        ("12345", 12345),
+        ("not_a_number", None),
+    ],
+)
+def test_get_pid(temp_daemon, file_content, expected):
+    if file_content is not None:
+        temp_daemon["pid_file"].write_text(file_content)
+    assert daemon.get_pid() == expected
 
 
 def test_is_running_no_pid(temp_daemon):
