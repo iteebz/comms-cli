@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from . import accounts as accts_module
 from . import drafts, policy, proposals
-from .adapters.email import gmail, outlook
+from .adapters.email import gmail, outlook, resend
 from .adapters.messaging import signal
 
 
@@ -30,6 +30,8 @@ def _get_email_adapter(provider: str):
         return gmail
     if provider == "outlook":
         return outlook
+    if provider == "resend":
+        return resend
     raise ValueError(f"Provider {provider} not supported")
 
 

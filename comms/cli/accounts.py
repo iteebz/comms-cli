@@ -3,7 +3,7 @@
 import typer
 
 from .. import accounts as accts_module
-from ..adapters.email import gmail, outlook
+from ..adapters.email import gmail, outlook, resend
 from ..adapters.messaging import signal
 
 app = typer.Typer()
@@ -11,7 +11,7 @@ app = typer.Typer()
 
 @app.command()
 def link(
-    provider: str = typer.Argument(..., help="Provider: gmail, outlook, signal"),
+    provider: str = typer.Argument(..., help="Provider: gmail, outlook, resend, signal"),
     identifier: str = typer.Argument(
         None, help="Email or phone number (e.g., +1234567890 for Signal)"
     ),
@@ -21,7 +21,7 @@ def link(
     ),
 ):
     """Link email or messaging account"""
-    if provider not in ["gmail", "outlook", "signal"]:
+    if provider not in ["gmail", "outlook", "resend", "signal"]:
         typer.echo(f"Unknown provider: {provider}")
         raise typer.Exit(1)
 
@@ -88,6 +88,17 @@ def link(
             typer.echo(f"Failed to connect: {msg}")
             raise typer.Exit(1)
 
+    elif provider == "resend":
+        if not email:
+            typer.echo("Resend requires email address")
+            raise typer.Exit(1)
+
+        account_id = accts_module.add_email_account(provider, email)
+        success, msg = resend.test_connection()
+        if not success:
+            typer.echo(f"Failed to connect: {msg}")
+            raise typer.Exit(1)
+
     typer.echo(f"Linked {provider}: {email}")
     typer.echo(f"Account ID: {account_id}")
 
@@ -127,3 +138,29 @@ def unlink(account_id: str):
     else:
         typer.echo("Failed to unlink account")
         raise typer.Exit(1)
+
+
+@app.command()
+def resend_setup(api_key: str = typer.Argument(None, help="Resend API key (re_...)")):
+    """Configure Resend API key for sending from @spacebrr.com addresses"""
+    if not api_key:
+        if resend.is_configured():
+            success, msg = resend.test_connection()
+            if success:
+                typer.echo(f"Resend: {msg}")
+            else:
+                typer.echo(f"Resend configured but error: {msg}")
+        else:
+            typer.echo("Resend not configured. Run: comms resend-setup <api_key>")
+        return
+
+    if not api_key.startswith("re_"):
+        typer.echo("Invalid API key format (must start with 're_')")
+        raise typer.Exit(1)
+
+    resend.store_api_key(api_key)
+    success, msg = resend.test_connection()
+    if success:
+        typer.echo(f"Resend configured: {msg}")
+    else:
+        typer.echo(f"Warning: API key stored but test failed: {msg}")

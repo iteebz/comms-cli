@@ -40,7 +40,19 @@ def test_connection() -> tuple[bool, str]:
         return False, f"Connection failed: {e}"
 
 
-def send_message(from_addr: str, to_addr: str, subject: str, body: str) -> tuple[bool, str]:
+def send_message(account_id: str, email_addr: str, draft) -> bool:
+    success, _ = _send_message_internal(
+        from_addr=email_addr,
+        to_addr=draft.to_addr,
+        subject=draft.subject or "(no subject)",
+        body=draft.body,
+    )
+    return success
+
+
+def _send_message_internal(
+    from_addr: str, to_addr: str, subject: str, body: str
+) -> tuple[bool, str]:
     api_key = _get_api_key()
     if not api_key:
         return False, "No API key configured"
@@ -63,12 +75,3 @@ def send_message(from_addr: str, to_addr: str, subject: str, body: str) -> tuple
         return False, f"API error: {resp.status_code} - {resp.text}"
     except Exception as e:
         return False, f"Send failed: {e}"
-
-
-def send_draft(from_addr: str, draft) -> tuple[bool, str]:
-    return send_message(
-        from_addr=from_addr,
-        to_addr=draft.to_addr,
-        subject=draft.subject or "(no subject)",
-        body=draft.body,
-    )
