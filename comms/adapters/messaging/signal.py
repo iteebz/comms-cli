@@ -226,10 +226,8 @@ def link(device_name: str = "comms-cli") -> tuple[bool, str]:
 
 
 def receive(phone: str, timeout: int = 1, store: bool = True) -> list[dict]:
-    import re
-
     result = subprocess.run(
-        [SIGNAL_CLI, "-a", phone, "receive", "-t", str(timeout)],
+        [SIGNAL_CLI, "-a", phone, "receive", "-t", str(timeout), "--output=json"],
         capture_output=True,
         text=True,
         timeout=timeout + 10,
@@ -238,33 +236,44 @@ def receive(phone: str, timeout: int = 1, store: bool = True) -> list[dict]:
         return []
 
     messages = []
-    output = result.stdout + result.stderr
+    if not result.stdout.strip():
+        return messages
 
-    envelope_pattern = re.compile(
-        r'Envelope from: "([^"]*)" (\+\d+)',
-        re.MULTILINE,
-    )
-    body_pattern = re.compile(r"^Body: (.+)$", re.MULTILINE)
-    timestamp_pattern = re.compile(r"^Timestamp: (\d+)", re.MULTILINE)
+    try:
+        envelopes = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return messages
 
-    blocks = re.split(r"\n(?=Envelope from:)", output)
+    if not isinstance(envelopes, list):
+        return messages
 
-    for block in blocks:
-        envelope_match = envelope_pattern.search(block)
-        body_match = body_pattern.search(block)
-        timestamp_match = timestamp_pattern.search(block)
+    for envelope in envelopes:
+        if not isinstance(envelope, dict):
+            continue
 
-        if envelope_match and body_match:
-            messages.append(
-                {
-                    "id": timestamp_match.group(1) if timestamp_match else "",
-                    "from": envelope_match.group(2),
-                    "from_name": envelope_match.group(1),
-                    "body": body_match.group(1),
-                    "timestamp": int(timestamp_match.group(1)) if timestamp_match else 0,
-                    "group": None,
-                }
-            )
+        sync_msg = envelope.get("syncMessage", {})
+        data_msg = envelope.get("dataMessage", {})
+        source = envelope.get("source") or envelope.get("sourceNumber", "")
+        source_name = envelope.get("sourceName", "")
+        timestamp = envelope.get("timestamp", 0)
+
+        body = data_msg.get("message") or sync_msg.get("message")
+        if not body or not source:
+            continue
+
+        group_info = data_msg.get("groupInfo")
+        group_id = group_info.get("groupId") if group_info else None
+
+        messages.append(
+            {
+                "id": str(timestamp),
+                "from": source,
+                "from_name": source_name,
+                "body": body,
+                "timestamp": timestamp,
+                "group": group_id,
+            }
+        )
 
     if store and messages:
         _store_messages(phone, messages)

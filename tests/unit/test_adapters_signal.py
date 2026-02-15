@@ -108,11 +108,7 @@ def test_receive_no_messages(mock_run):
 @patch("subprocess.run")
 @patch("comms.adapters.messaging.signal._store_messages")
 def test_receive_valid_message(mock_store, mock_run):
-    output = """
-Envelope from: "Alice" +1111111111
-Timestamp: 1234567890
-Body: Hello world
-"""
+    output = '[{"source":"+1111111111","sourceName":"Alice","timestamp":1234567890,"dataMessage":{"message":"Hello world"}}]'
     mock_run.return_value = MagicMock(returncode=0, stdout=output, stderr="")
     messages = signal.receive("+1234567890", timeout=1, store=True)
     assert len(messages) == 1
@@ -125,15 +121,7 @@ Body: Hello world
 
 @patch("subprocess.run")
 def test_receive_multiple_messages(mock_run):
-    output = """
-Envelope from: "Alice" +1111111111
-Timestamp: 1234567890
-Body: First message
-
-Envelope from: "Bob" +2222222222
-Timestamp: 1234567891
-Body: Second message
-"""
+    output = '[{"source":"+1111111111","sourceName":"Alice","timestamp":1234567890,"dataMessage":{"message":"First message"}},{"source":"+2222222222","sourceName":"Bob","timestamp":1234567891,"dataMessage":{"message":"Second message"}}]'
     mock_run.return_value = MagicMock(returncode=0, stdout=output, stderr="")
     messages = signal.receive("+1234567890", timeout=1, store=False)
     assert len(messages) == 2
