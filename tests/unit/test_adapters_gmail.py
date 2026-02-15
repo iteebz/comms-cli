@@ -209,20 +209,16 @@ def test_fetch_thread_messages(mock_build, mock_get_creds, mock_creds, mock_serv
     assert messages[0]["subject"] == "Hello"
 
 
-def test_decode_body_valid():
-    encoded = "SGVsbG8gd29ybGQ="
-    result = gmail._decode_body(encoded)
-    assert result == "Hello world"
-
-
-def test_decode_body_empty():
-    result = gmail._decode_body(None)
-    assert result == ""
-
-
-def test_decode_body_invalid():
-    result = gmail._decode_body("!!!invalid!!!")
-    assert result == ""
+@pytest.mark.parametrize(
+    "encoded,expected",
+    [
+        ("SGVsbG8gd29ybGQ=", "Hello world"),
+        (None, ""),
+        ("!!!invalid!!!", ""),
+    ],
+)
+def test_decode_body(encoded, expected):
+    assert gmail._decode_body(encoded) == expected
 
 
 def test_extract_body_plain_text():
