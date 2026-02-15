@@ -113,74 +113,51 @@ def test_list_threads_with_results(mock_build, mock_get_creds, mock_creds, mock_
     assert threads[0]["from"] == "sender@example.com"
 
 
+@pytest.mark.parametrize(
+    "operation,func",
+    [
+        ("archive", gmail.archive_thread),
+        ("delete", gmail.delete_thread),
+        ("flag", gmail.flag_thread),
+        ("unflag", gmail.unflag_thread),
+        ("unarchive", gmail.unarchive_thread),
+        ("undelete", gmail.undelete_thread),
+    ],
+)
 @patch("comms.adapters.email.gmail._get_credentials")
 @patch("comms.adapters.email.gmail.build")
-def test_archive_thread_success(mock_build, mock_get_creds, mock_creds, mock_service):
+def test_thread_operations_success(
+    mock_build, mock_get_creds, mock_creds, mock_service, operation, func
+):
     mock_get_creds.return_value = (mock_creds, "test@example.com")
     mock_build.return_value = mock_service
-    mock_service.users().threads().modify().execute.return_value = {}
-    result = gmail.archive_thread("thread1", "test@example.com")
+    result = func("thread1", "test@example.com")
     assert result is True
 
 
+@pytest.mark.parametrize(
+    "operation,func",
+    [
+        ("archive", gmail.archive_thread),
+        ("delete", gmail.delete_thread),
+        ("flag", gmail.flag_thread),
+        ("unflag", gmail.unflag_thread),
+        ("unarchive", gmail.unarchive_thread),
+        ("undelete", gmail.undelete_thread),
+    ],
+)
 @patch("comms.adapters.email.gmail._get_credentials")
 @patch("comms.adapters.email.gmail.build")
-def test_archive_thread_failure(mock_build, mock_get_creds, mock_creds, mock_service):
+def test_thread_operations_failure(
+    mock_build, mock_get_creds, mock_creds, mock_service, operation, func
+):
     mock_get_creds.return_value = (mock_creds, "test@example.com")
     mock_build.return_value = mock_service
     mock_service.users().threads().modify().execute.side_effect = Exception("API error")
-    result = gmail.archive_thread("thread1", "test@example.com")
+    mock_service.users().threads().trash().execute.side_effect = Exception("API error")
+    mock_service.users().threads().untrash().execute.side_effect = Exception("API error")
+    result = func("thread1", "test@example.com")
     assert result is False
-
-
-@patch("comms.adapters.email.gmail._get_credentials")
-@patch("comms.adapters.email.gmail.build")
-def test_delete_thread(mock_build, mock_get_creds, mock_creds, mock_service):
-    mock_get_creds.return_value = (mock_creds, "test@example.com")
-    mock_build.return_value = mock_service
-    mock_service.users().threads().trash().execute.return_value = {}
-    result = gmail.delete_thread("thread1", "test@example.com")
-    assert result is True
-
-
-@patch("comms.adapters.email.gmail._get_credentials")
-@patch("comms.adapters.email.gmail.build")
-def test_flag_thread(mock_build, mock_get_creds, mock_creds, mock_service):
-    mock_get_creds.return_value = (mock_creds, "test@example.com")
-    mock_build.return_value = mock_service
-    mock_service.users().threads().modify().execute.return_value = {}
-    result = gmail.flag_thread("thread1", "test@example.com")
-    assert result is True
-
-
-@patch("comms.adapters.email.gmail._get_credentials")
-@patch("comms.adapters.email.gmail.build")
-def test_unflag_thread(mock_build, mock_get_creds, mock_creds, mock_service):
-    mock_get_creds.return_value = (mock_creds, "test@example.com")
-    mock_build.return_value = mock_service
-    mock_service.users().threads().modify().execute.return_value = {}
-    result = gmail.unflag_thread("thread1", "test@example.com")
-    assert result is True
-
-
-@patch("comms.adapters.email.gmail._get_credentials")
-@patch("comms.adapters.email.gmail.build")
-def test_unarchive_thread(mock_build, mock_get_creds, mock_creds, mock_service):
-    mock_get_creds.return_value = (mock_creds, "test@example.com")
-    mock_build.return_value = mock_service
-    mock_service.users().threads().modify().execute.return_value = {}
-    result = gmail.unarchive_thread("thread1", "test@example.com")
-    assert result is True
-
-
-@patch("comms.adapters.email.gmail._get_credentials")
-@patch("comms.adapters.email.gmail.build")
-def test_undelete_thread(mock_build, mock_get_creds, mock_creds, mock_service):
-    mock_get_creds.return_value = (mock_creds, "test@example.com")
-    mock_build.return_value = mock_service
-    mock_service.users().threads().untrash().execute.return_value = {}
-    result = gmail.undelete_thread("thread1", "test@example.com")
-    assert result is True
 
 
 @patch("comms.adapters.email.gmail._get_credentials")
