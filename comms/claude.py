@@ -1,9 +1,14 @@
 """Headless Claude invocation for draft generation and summarization."""
 
-import subprocess
+from typing import cast
+
+from anthropic import Anthropic
+from anthropic.types import TextBlock
 
 from .contacts import get_contact_context
 from .templates import format_templates_for_prompt
+
+_client = Anthropic()
 
 
 def _extract_sender_from_context(context: str) -> str:
@@ -51,36 +56,33 @@ Acknowledging their update and confirming next steps.
 
 Thanks for the update. I'll review the proposal by Friday and get back to you with feedback."""
 
-    result = subprocess.run(
-        [
-            "claude",
-            "--print",
-            "--model",
-            model,
-            "-p",
-            prompt,
-            "--dangerously-skip-permissions",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
+    try:
+        message = _client.messages.create(
+            model=model,
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text_block = cast(
+            TextBlock,
+            next((block for block in message.content if isinstance(block, TextBlock)), None),
+        )
+        if not text_block:
+            return "", "No text output from Claude"
 
-    if result.returncode != 0:
-        return "", f"Claude failed: {result.stderr}"
+        output = text_block.text.strip()
+        if not output:
+            return "", "No output from Claude"
 
-    output = result.stdout.strip()
-    if not output:
-        return "", "No output from Claude"
+        parts = output.split("\n\n", 1)
+        if len(parts) == 2:
+            reasoning, body = parts
+        else:
+            reasoning = ""
+            body = output
 
-    parts = output.split("\n\n", 1)
-    if len(parts) == 2:
-        reasoning, body = parts
-    else:
-        reasoning = ""
-        body = output
-
-    return body.strip(), reasoning.strip()
+        return body.strip(), reasoning.strip()
+    except Exception as e:
+        return "", f"Claude failed: {str(e)}"
 
 
 def generate_signal_reply(
@@ -125,36 +127,33 @@ Confirming the time works.
 
 Yeah 3pm works for me, see you then!"""
 
-    result = subprocess.run(
-        [
-            "claude",
-            "--print",
-            "--model",
-            model,
-            "-p",
-            prompt,
-            "--dangerously-skip-permissions",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
+    try:
+        message = _client.messages.create(
+            model=model,
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text_block = cast(
+            TextBlock,
+            next((block for block in message.content if isinstance(block, TextBlock)), None),
+        )
+        if not text_block:
+            return "", "No text output from Claude"
 
-    if result.returncode != 0:
-        return "", f"Claude failed: {result.stderr}"
+        output = text_block.text.strip()
+        if not output:
+            return "", "No output from Claude"
 
-    output = result.stdout.strip()
-    if not output:
-        return "", "No output from Claude"
+        parts = output.split("\n\n", 1)
+        if len(parts) == 2:
+            reasoning, body = parts
+        else:
+            reasoning = ""
+            body = output
 
-    parts = output.split("\n\n", 1)
-    if len(parts) == 2:
-        reasoning, body = parts
-    else:
-        reasoning = ""
-        body = output
-
-    return body.strip(), reasoning.strip()
+        return body.strip(), reasoning.strip()
+    except Exception as e:
+        return "", f"Claude failed: {str(e)}"
 
 
 def summarize_thread(
@@ -182,22 +181,19 @@ THREAD:
 
 Respond with just the summary, no preamble."""
 
-    result = subprocess.run(
-        [
-            "claude",
-            "--print",
-            "--model",
-            model,
-            "-p",
-            prompt,
-            "--dangerously-skip-permissions",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+    try:
+        message = _client.messages.create(
+            model=model,
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text_block = cast(
+            TextBlock,
+            next((block for block in message.content if isinstance(block, TextBlock)), None),
+        )
+        if not text_block:
+            return "Summary failed: no text output"
 
-    if result.returncode != 0:
-        return f"Summary failed: {result.stderr}"
-
-    return result.stdout.strip()
+        return text_block.text.strip()
+    except Exception as e:
+        return f"Summary failed: {str(e)}"

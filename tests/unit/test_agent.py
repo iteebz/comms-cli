@@ -180,40 +180,56 @@ def test_handle_incoming_no_result(mock_process):
     assert response is None
 
 
-@patch("subprocess.run")
-def test_parse_natural_language_success(mock_run):
-    mock_run.return_value = MagicMock(returncode=0, stdout='{"action": "inbox", "args": []}')
+@patch("comms.agent._client.messages.create")
+def test_parse_natural_language_success(mock_create):
+    from anthropic.types import TextBlock
+
+    mock_message = MagicMock()
+    mock_message.content = [TextBlock(type="text", text='{"action": "inbox", "args": []}')]
+    mock_create.return_value = mock_message
     cmd = agent.parse_natural_language("show me my inbox")
     assert cmd is not None
     assert cmd.action == "inbox"
 
 
-@patch("subprocess.run")
-def test_parse_natural_language_markdown_wrapped(mock_run):
-    mock_run.return_value = MagicMock(
-        returncode=0, stdout='```json\n{"action": "status", "args": []}\n```'
-    )
+@patch("comms.agent._client.messages.create")
+def test_parse_natural_language_markdown_wrapped(mock_create):
+    from anthropic.types import TextBlock
+
+    mock_message = MagicMock()
+    mock_message.content = [
+        TextBlock(type="text", text='```json\n{"action": "status", "args": []}\n```')
+    ]
+    mock_create.return_value = mock_message
     cmd = agent.parse_natural_language("what's the status?")
     assert cmd is not None
     assert cmd.action == "status"
 
 
-@patch("subprocess.run")
-def test_parse_natural_language_not_command(mock_run):
-    mock_run.return_value = MagicMock(returncode=0, stdout='{"action": null}')
+@patch("comms.agent._client.messages.create")
+def test_parse_natural_language_not_command(mock_create):
+    from anthropic.types import TextBlock
+
+    mock_message = MagicMock()
+    mock_message.content = [TextBlock(type="text", text='{"action": null}')]
+    mock_create.return_value = mock_message
     cmd = agent.parse_natural_language("random message")
     assert cmd is None
 
 
-@patch("subprocess.run")
-def test_parse_natural_language_invalid_json(mock_run):
-    mock_run.return_value = MagicMock(returncode=0, stdout="not json")
+@patch("comms.agent._client.messages.create")
+def test_parse_natural_language_invalid_json(mock_create):
+    from anthropic.types import TextBlock
+
+    mock_message = MagicMock()
+    mock_message.content = [TextBlock(type="text", text="not json")]
+    mock_create.return_value = mock_message
     cmd = agent.parse_natural_language("show inbox")
     assert cmd is None
 
 
-@patch("subprocess.run")
-def test_parse_natural_language_subprocess_error(mock_run):
-    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
+@patch("comms.agent._client.messages.create")
+def test_parse_natural_language_subprocess_error(mock_create):
+    mock_create.side_effect = Exception("API error")
     cmd = agent.parse_natural_language("show inbox")
     assert cmd is None

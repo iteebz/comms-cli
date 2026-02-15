@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import json
+import shlex
 import subprocess
 from dataclasses import dataclass
+from typing import cast
+
+from anthropic import Anthropic
+from anthropic.types import TextBlock
 
 from .config import COMMS_DIR
+
+_client = Anthropic()
 
 AUTHORIZED_FILE = COMMS_DIR / "authorized_senders.txt"
 
@@ -91,8 +99,6 @@ COMMAND_MAP = {
 
 
 def parse_natural_language(text: str) -> Command | None:
-    import json
-
     prompt = f"""Parse this message into a comms command. Return JSON only.
 
 AVAILABLE COMMANDS:
@@ -123,24 +129,19 @@ OUTPUT FORMAT (JSON only, no explanation):
 If not a command request, return: {{"action": null}}"""
 
     try:
-        result = subprocess.run(
-            [
-                "claude",
-                "--print",
-                "--model",
-                "claude-haiku-4-5",
-                "-p",
-                prompt,
-                "--dangerously-skip-permissions",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
+        message = _client.messages.create(
+            model="claude-haiku-4-5",
+            max_tokens=256,
+            messages=[{"role": "user", "content": prompt}],
         )
-        if result.returncode != 0:
+        text_block = cast(
+            TextBlock,
+            next((block for block in message.content if isinstance(block, TextBlock)), None),
+        )
+        if not text_block:
             return None
 
-        output = result.stdout.strip()
+        output = text_block.text.strip()
         if output.startswith("```"):
             lines = output.split("\n")
             output = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
@@ -161,7 +162,7 @@ If not a command request, return: {{"action": null}}"""
 def _run_comms_command(cmd: str) -> tuple[bool, str]:
     try:
         result = subprocess.run(
-            cmd.split(),
+            shlex.split(cmd),
             capture_output=True,
             text=True,
             timeout=60,
