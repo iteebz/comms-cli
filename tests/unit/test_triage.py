@@ -152,6 +152,71 @@ def test_triage_inbox_empty(mock_inbox):
     assert proposals == []
 
 
+@patch("comms.triage.subprocess.run")
+@patch("comms.triage._load_rules", return_value="")
+@patch("comms.triage._build_prompt", return_value="prompt")
+@patch("comms.triage._apply_patterns")
+@patch("comms.triage.is_snoozed", return_value=False)
+@patch("comms.triage.mark_resurfaced")
+@patch("comms.triage.get_due_snoozes", return_value=[])
+@patch("comms.triage.get_unified_inbox")
+def test_triage_inbox_returns_pattern_proposals_on_subprocess_failure(
+    mock_inbox,
+    _mock_due,
+    _mock_resurfaced,
+    _mock_is_snoozed,
+    mock_apply_patterns,
+    _mock_build_prompt,
+    _mock_load_rules,
+    mock_run,
+):
+    item = InboxItem("id1", "email", "t1", "sender@x.com", "subj", "prev", True, 123)
+    expected = triage.TriageProposal(item=item, action="archive", reasoning="auto", confidence=0.9)
+    mock_inbox.return_value = [item]
+    mock_apply_patterns.return_value = ([expected], [item])
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="boom")
+
+    proposals = triage.triage_inbox()
+
+    assert proposals == [expected]
+
+
+@patch("comms.triage.subprocess.run")
+@patch("comms.triage._load_rules", return_value="")
+@patch("comms.triage._build_prompt", return_value="prompt")
+@patch("comms.triage._parse_response")
+@patch("comms.triage.detect_urgency")
+@patch("comms.triage._apply_patterns")
+@patch("comms.triage.is_snoozed", return_value=False)
+@patch("comms.triage.mark_resurfaced")
+@patch("comms.triage.get_due_snoozes", return_value=[])
+@patch("comms.triage.get_unified_inbox")
+def test_triage_inbox_appends_urgency_note_for_non_flag_actions(
+    mock_inbox,
+    _mock_due,
+    _mock_resurfaced,
+    _mock_is_snoozed,
+    mock_apply_patterns,
+    mock_detect_urgency,
+    mock_parse_response,
+    _mock_build_prompt,
+    _mock_load_rules,
+    mock_run,
+):
+    item = InboxItem("id1", "email", "t1", "sender@x.com", "subj", "prev", True, 123)
+    proposal = triage.TriageProposal(item=item, action="archive", reasoning="base", confidence=0.8)
+    mock_inbox.return_value = [item]
+    mock_apply_patterns.return_value = ([], [item])
+    mock_run.return_value = MagicMock(returncode=0, stdout="[]", stderr="")
+    mock_parse_response.return_value = [proposal]
+    mock_detect_urgency.return_value = (0.8, "urgent keywords")
+
+    proposals = triage.triage_inbox()
+
+    assert len(proposals) == 1
+    assert "[urgent: urgent keywords]" in proposals[0].reasoning
+
+
 @patch("comms.proposals.create_proposal")
 def test_create_proposals_min_confidence(mock_create):
     mock_create.return_value = ("prop123", None, False)

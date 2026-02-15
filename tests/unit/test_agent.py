@@ -132,6 +132,43 @@ def test_execute_command_archive_with_id(mock_run):
     assert "thread123" in result.message
 
 
+@pytest.mark.parametrize(
+    "action,arg,expected_cmd,expected_executed,fallback_text",
+    [
+        ("delete", "thread123", "comms delete thread123", "delete thread123", "Deleted thread123"),
+        (
+            "summarize",
+            "thread123",
+            "comms summarize thread123",
+            "summarize thread123",
+            "",
+        ),
+        (
+            "approve",
+            "draft123",
+            "comms approve-draft draft123",
+            "approve-draft draft123",
+            "Approved draft123",
+        ),
+        ("send", "draft123", "comms send draft123", "send draft123", "Sent draft123"),
+    ],
+)
+@patch("comms.agent._run_comms_command")
+def test_execute_command_argument_actions(
+    mock_run, action, arg, expected_cmd, expected_executed, fallback_text
+):
+    mock_run.return_value = (True, "")
+
+    cmd = agent.Command(action=action, args=[arg], raw=f"{action} {arg}")
+    result = agent.execute_command(cmd)
+
+    assert result.success is True
+    assert result.executed == expected_executed
+    if fallback_text:
+        assert result.message == fallback_text
+    mock_run.assert_called_once_with(expected_cmd)
+
+
 @patch("comms.agent._run_comms_command")
 def test_execute_command_draft_reply(mock_run):
     mock_run.return_value = (True, "draft created")
