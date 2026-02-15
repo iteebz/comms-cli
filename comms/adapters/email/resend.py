@@ -50,6 +50,14 @@ def send_message(account_id: str, email_addr: str, draft) -> bool:
     return success
 
 
+def list_threads(email_addr: str, label: str = "inbox", max_results: int = 50) -> list[dict]:
+    return []
+
+
+def fetch_thread_messages(thread_id: str, email_addr: str) -> list[dict]:
+    return []
+
+
 def _send_message_internal(
     from_addr: str, to_addr: str, subject: str, body: str
 ) -> tuple[bool, str]:
