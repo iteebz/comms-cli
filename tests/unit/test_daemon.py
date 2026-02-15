@@ -98,7 +98,8 @@ def test_stop_not_running(temp_daemon):
 
 @patch("os.kill")
 @patch("comms.daemon.is_running")
-def test_stop_graceful(mock_is_running, mock_kill, temp_daemon):
+@patch("time.sleep")
+def test_stop_graceful(mock_sleep, mock_is_running, mock_kill, temp_daemon):
     temp_daemon["pid_file"].write_text("12345")
     mock_is_running.side_effect = [True, False]
     success, msg = daemon.stop()
