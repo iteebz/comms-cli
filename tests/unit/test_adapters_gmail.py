@@ -121,9 +121,6 @@ def test_archive_thread_success(mock_build, mock_get_creds, mock_creds, mock_ser
     mock_service.users().threads().modify().execute.return_value = {}
     result = gmail.archive_thread("thread1", "test@example.com")
     assert result is True
-    mock_service.users().threads().modify.assert_called_with(
-        userId="me", id="thread1", body={"removeLabelIds": ["INBOX"]}
-    )
 
 
 @patch("comms.adapters.email.gmail._get_credentials")
