@@ -11,4 +11,5 @@ build/
 .life_backups/
 *credentials.json
 *.json
+!pyrightconfig.json
 .ci.log
