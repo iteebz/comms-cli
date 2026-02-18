@@ -1,4 +1,5 @@
 from typing import Any
+
 """System commands: init, backup, status, inbox, triage."""
 
 from datetime import datetime
@@ -322,11 +323,23 @@ def clear(
         typer.echo("Inbox clear — nothing to triage")
         return
 
+    from comms.contacts import get_high_priority_patterns
+
+    high_priority = get_high_priority_patterns()
+
+    def _is_high_priority(p: Any) -> bool:
+        sender_lower = p.item.sender.lower()
+        return any(pat in sender_lower for pat in high_priority)
+
     auto_items = [
-        p for p in triage_proposals if p.confidence >= confidence and p.action != "ignore"
+        p
+        for p in triage_proposals
+        if p.confidence >= confidence and p.action != "ignore" and not _is_high_priority(p)
     ]
     review_items = [
-        p for p in triage_proposals if p.confidence < confidence or p.action == "ignore"
+        p
+        for p in triage_proposals
+        if p.confidence < confidence or p.action == "ignore" or _is_high_priority(p)
     ]
 
     typer.echo(f"\nAuto ({len(auto_items)}) | Review ({len(review_items)})\n")

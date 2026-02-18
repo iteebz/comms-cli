@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from . import proposals as proposals_module
 from .config import RULES_PATH
-from .contacts import format_contacts_for_prompt
+from .contacts import format_contacts_for_prompt, get_high_priority_patterns
 from .patterns import detect_urgency, should_skip_triage
 from .senders import format_sender_context_for_prompt
 from .services import InboxItem, get_unified_inbox
@@ -52,7 +52,12 @@ def _build_prompt(items: list[InboxItem], rules: str) -> str:
     contacts = format_contacts_for_prompt()
     histories = "\n\n".join(sender_histories) if sender_histories else ""
 
-    return f"""You are triaging a communications inbox. Analyze each item and propose an action.
+    return f"""You are triaging a communications inbox for someone with ADHD. Analyze each item and propose an action.
+
+STEWARD CONTEXT:
+- High-priority contacts (flag always, never auto-archive): people in personal life, close relationships
+- High-stakes subjects: legal notices, finance, tax, debt, court — always flag
+- Default bias: delete noise aggressively, flag anything requiring a human decision
 
 RULES (user preferences):
 {rules or "No rules configured. Use sensible defaults."}
@@ -63,7 +68,7 @@ RULES (user preferences):
 
 VALID ACTIONS:
 - For email: archive, delete, flag, ignore
-- For signal: mark_read, ignore
+- For signal: mark_read, flag, ignore
 
 OUTPUT FORMAT (JSON array, one object per item):
 [
@@ -192,11 +197,18 @@ def triage_inbox(
         return pattern_proposals
 
     claude_proposals = _parse_response(result.stdout, remaining)
+    high_priority = get_high_priority_patterns()
 
     for p in claude_proposals:
         urgency, urgency_reason = detect_urgency(p.item.subject, p.item.preview)
         if urgency >= 0.6 and p.action not in ("flag", "delete"):
             p.reasoning += f" [urgent: {urgency_reason}]"
+
+        sender_lower = p.item.sender.lower()
+        if any(pat in sender_lower for pat in high_priority) and p.action not in ("flag",):
+            p.action = "flag"
+            p.reasoning = f"[steward] high-priority contact — {p.reasoning}"
+            p.confidence = 1.0
 
     return pattern_proposals + claude_proposals
 
