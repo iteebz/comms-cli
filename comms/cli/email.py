@@ -14,7 +14,7 @@ def threads(
     label: str = typer.Option(
         "inbox", "--label", "-l", help="Label filter: inbox, unread, archive, trash, starred, sent"
     ),
-):
+) -> None:
     """List threads from all accounts"""
     for entry in services.list_threads(label):
         account = entry["account"]
@@ -31,7 +31,7 @@ def threads(
 
 
 @app.command()
-def thread(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
+def thread(thread_id: str, email: str = typer.Option(None, "--email", "-e")) -> None:
     """Fetch and display full thread"""
     full_id = run_service(services.resolve_thread_id, thread_id, email) or thread_id
     thread_messages = run_service(services.fetch_thread, full_id, email)
@@ -47,7 +47,7 @@ def thread(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
 
 
 @app.command()
-def summarize(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
+def summarize(thread_id: str, email: str = typer.Option(None, "--email", "-e")) -> None:
     """Summarize thread using Claude"""
     from comms import claude
 
@@ -66,7 +66,7 @@ def snooze(
         "tomorrow", "--until", "-u", help="When to resurface: tomorrow, monday, 2d, 4h"
     ),
     email: str = typer.Option(None, "--email", "-e"),
-):
+) -> None:
     """Snooze thread until later"""
     from comms import snooze as snooze_module
 
@@ -81,7 +81,7 @@ def snooze(
 
 
 @app.command()
-def snoozed():
+def snoozed() -> None:
     """List snoozed threads"""
     from comms import snooze as snooze_module
 
@@ -98,7 +98,7 @@ def snoozed():
 
 
 @app.command()
-def archive(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
+def archive(thread_id: str, email: str = typer.Option(None, "--email", "-e")) -> None:
     """Archive thread (remove from inbox)"""
     run_service(services.thread_action, "archive", thread_id, email)
     typer.echo(f"Archived thread: {thread_id}")
@@ -106,7 +106,7 @@ def archive(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
 
 
 @app.command()
-def delete(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
+def delete(thread_id: str, email: str = typer.Option(None, "--email", "-e")) -> None:
     """Delete thread (move to trash)"""
     run_service(services.thread_action, "delete", thread_id, email)
     typer.echo(f"Deleted thread: {thread_id}")
@@ -114,30 +114,30 @@ def delete(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
 
 
 @app.command()
-def flag(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
+def flag(thread_id: str, email: str = typer.Option(None, "--email", "-e")) -> None:
     """Flag thread (star it)"""
     _thread_action(thread_id, "flag", email)
 
 
 @app.command()
-def unflag(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
+def unflag(thread_id: str, email: str = typer.Option(None, "--email", "-e")) -> None:
     """Unflag thread (unstar it)"""
     _thread_action(thread_id, "unflag", email)
 
 
 @app.command()
-def unarchive(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
+def unarchive(thread_id: str, email: str = typer.Option(None, "--email", "-e")) -> None:
     """Unarchive thread (restore to inbox)"""
     _thread_action(thread_id, "unarchive", email)
 
 
 @app.command()
-def undelete(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
+def undelete(thread_id: str, email: str = typer.Option(None, "--email", "-e")) -> None:
     """Undelete thread (restore from trash)"""
     _thread_action(thread_id, "undelete", email)
 
 
-def _thread_action(thread_id: str, action_name: str, email: str | None = None):
+def _thread_action(thread_id: str, action_name: str, email: str | None = None) -> None:
     run_service(services.thread_action, action_name, thread_id, email)
     past_tense = f"{action_name}ged" if action_name.endswith("flag") else f"{action_name}d"
     typer.echo(f"{past_tense.capitalize()} thread: {thread_id}")
