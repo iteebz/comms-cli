@@ -36,12 +36,12 @@ def _sender_id(sender: str) -> str:
 
 
 def record_received(sender: str) -> None:
-    sender_norm = _normalize_sender(sender)
-    sid = _sender_id(sender)
+    normalized_sender = _normalize_sender(sender)
+    sender_hash = _sender_id(sender)
     now = datetime.now().isoformat()
 
     with db.get_db() as conn:
-        existing = conn.execute("SELECT id FROM sender_stats WHERE id = ?", (sid,)).fetchone()
+        existing = conn.execute("SELECT id FROM sender_stats WHERE id = ?", (sender_hash,)).fetchone()
 
         if existing:
             conn.execute(
@@ -50,19 +50,19 @@ def record_received(sender: str) -> None:
                     last_received_at = ?,
                     updated_at = ?
                 WHERE id = ?""",
-                (now, now, sid),
+                (now, now, sender_hash),
             )
         else:
             conn.execute(
                 """INSERT INTO sender_stats (id, sender, received_count, last_received_at, updated_at)
                 VALUES (?, ?, 1, ?, ?)""",
-                (sid, sender_norm, now, now),
+                (sender_hash, normalized_sender, now, now),
             )
 
 
 def record_action(sender: str, action: str, response_hours: float | None = None) -> None:
-    sender_norm = _normalize_sender(sender)
-    sid = _sender_id(sender)
+    normalized_sender = _normalize_sender(sender)
+    sender_hash = _sender_id(sender)
     now = datetime.now().isoformat()
 
     column_map = {
@@ -78,7 +78,7 @@ def record_action(sender: str, action: str, response_hours: float | None = None)
 
     with db.get_db() as conn:
         existing = conn.execute(
-            "SELECT id, avg_response_hours, replied_count FROM sender_stats WHERE id = ?", (sid,)
+            "SELECT id, avg_response_hours, replied_count FROM sender_stats WHERE id = ?", (sender_hash,)
         ).fetchone()
 
         if existing:
@@ -88,25 +88,25 @@ def record_action(sender: str, action: str, response_hours: float | None = None)
                 new_avg = ((old_avg * old_count) + response_hours) / (old_count + 1)
                 conn.execute(
                     f"UPDATE sender_stats SET {column} = {column} + 1, avg_response_hours = ?, last_action_at = ?, updated_at = ? WHERE id = ?",
-                    (new_avg, now, now, sid),
+                    (new_avg, now, now, sender_hash),
                 )
             else:
                 conn.execute(
                     f"UPDATE sender_stats SET {column} = {column} + 1, last_action_at = ?, updated_at = ? WHERE id = ?",
-                    (now, now, sid),
+                    (now, now, sender_hash),
                 )
         else:
             conn.execute(
                 f"INSERT INTO sender_stats (id, sender, {column}, last_action_at, updated_at) VALUES (?, ?, 1, ?, ?)",
-                (sid, sender_norm, now, now),
+                (sender_hash, normalized_sender, now, now),
             )
 
 
 def get_sender_stat(sender: str) -> SenderStat | None:
-    sid = _sender_id(sender)
+    sender_hash = _sender_id(sender)
 
     with db.get_db() as conn:
-        row = conn.execute("SELECT * FROM sender_stats WHERE id = ?", (sid,)).fetchone()
+        row = conn.execute("SELECT * FROM sender_stats WHERE id = ?", (sender_hash,)).fetchone()
 
     if not row:
         return None

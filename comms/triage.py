@@ -91,16 +91,16 @@ def _parse_response(output: str, items: list[InboxItem]) -> list[TriageProposal]
     item_map = {item.item_id[:8]: item for item in items}
     proposals = []
 
-    for p in proposals_data:
-        item_id = p.get("id", "")
+    for proposal_data in proposals_data:
+        item_id = proposal_data.get("id", "")
         if item_id not in item_map:
             continue
         proposals.append(
             TriageProposal(
                 item=item_map[item_id],
-                action=p.get("action", "ignore"),
-                reasoning=p.get("reasoning", ""),
-                confidence=float(p.get("confidence", 0.5)),
+                action=proposal_data.get("action", "ignore"),
+                reasoning=proposal_data.get("reasoning", ""),
+                confidence=float(proposal_data.get("confidence", 0.5)),
             )
         )
 
