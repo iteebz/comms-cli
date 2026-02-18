@@ -173,7 +173,7 @@ def list_threads(email: str, label: str = "inbox", max_results: int = 50) -> lis
         timestamp = 0
         if received:
             try:
-                dt = datetime.fromisoformat(received.replace("Z", "+00:00"))
+                dt = datetime.fromisoformat(received)
                 timestamp = int(dt.timestamp() * 1000)
             except ValueError:
                 pass

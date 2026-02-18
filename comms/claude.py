@@ -1,8 +1,7 @@
-from typing import Any
-
 """Headless Claude invocation for draft generation and summarization."""
 
 import subprocess
+from typing import Any
 
 from .contacts import get_contact_context
 from .templates import format_templates_for_prompt

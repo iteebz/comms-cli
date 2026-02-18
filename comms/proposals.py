@@ -15,8 +15,15 @@ VALID_ACTIONS = {
 
 
 def _validate_entity(entity_type: str, entity_id: str, email: str | None) -> tuple[bool, str]:
+    def validate_thread() -> bool:
+        acc = accts_module.select_email_account(email)[0]
+        if not acc:
+            return False
+        acc_email = acc.get("email") or email or ""
+        return bool(gmail.fetch_thread_messages(entity_id, acc_email))
+
     validators = {
-        "thread": lambda: (lambda acc: acc and gmail.fetch_thread_messages(entity_id, acc.get("email") or email))(accts_module.select_email_account(email)[0]),
+        "thread": validate_thread,
         "draft": lambda: drafts.get_draft(entity_id),
         "signal_message": lambda: signal.get_message(entity_id),
     }
@@ -32,7 +39,10 @@ def _validate_action(entity_type: str, proposed_action: str) -> tuple[bool, str]
     if entity_type not in VALID_ACTIONS:
         return False, f"Unknown entity_type: {entity_type}"
     if proposed_action not in VALID_ACTIONS[entity_type]:
-        return False, f"Invalid action '{proposed_action}' for {entity_type}. Valid: {VALID_ACTIONS[entity_type]}"
+        return (
+            False,
+            f"Invalid action '{proposed_action}' for {entity_type}. Valid: {VALID_ACTIONS[entity_type]}",
+        )
     return True, ""
 
 

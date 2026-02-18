@@ -102,7 +102,8 @@ def unlink(account_id: str) -> None:
     """Unlink account by ID or email"""
     accounts = accts_module.list_accounts()
     matching = [
-        account for account in accounts
+        account
+        for account in accounts
         if account["id"].startswith(account_id) or account["email"] == account_id
     ]
 

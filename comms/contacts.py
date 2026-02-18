@@ -89,7 +89,7 @@ def _load_peeps() -> list[ContactNote]:
                     high_priority=True,
                 )
             )
-        except Exception:
+        except (OSError, ValueError):
             continue
 
     return contacts

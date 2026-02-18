@@ -41,7 +41,9 @@ def record_received(sender: str) -> None:
     now = datetime.now().isoformat()
 
     with db.get_db() as conn:
-        existing = conn.execute("SELECT id FROM sender_stats WHERE id = ?", (sender_hash,)).fetchone()
+        existing = conn.execute(
+            "SELECT id FROM sender_stats WHERE id = ?", (sender_hash,)
+        ).fetchone()
 
         if existing:
             conn.execute(
@@ -78,7 +80,8 @@ def record_action(sender: str, action: str, response_hours: float | None = None)
 
     with db.get_db() as conn:
         existing = conn.execute(
-            "SELECT id, avg_response_hours, replied_count FROM sender_stats WHERE id = ?", (sender_hash,)
+            "SELECT id, avg_response_hours, replied_count FROM sender_stats WHERE id = ?",
+            (sender_hash,),
         ).fetchone()
 
         if existing:

@@ -1,8 +1,7 @@
-from typing import Any
-
 """System commands: init, backup, status, inbox, triage."""
 
 from datetime import datetime
+from typing import Any
 
 import typer
 
@@ -112,7 +111,9 @@ def contacts() -> None:
 
 
 @app.command()
-def templates(init: bool = typer.Option(False, "--init", help="Create default templates file")) -> None:
+def templates(
+    init: bool = typer.Option(False, "--init", help="Create default templates file"),
+) -> None:
     """Show reply templates (edit at ~/.comms/templates.md)"""
     from comms.templates import TEMPLATES_PATH, get_templates, init_templates
 

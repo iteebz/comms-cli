@@ -103,6 +103,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "S607", "S606"]
+"comms/cli/**/*.py" = ["PLC0415", "TID252"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
