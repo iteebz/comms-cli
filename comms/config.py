@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import ClassVar, Any
+from typing import Any, ClassVar
 
 import yaml
 

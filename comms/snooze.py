@@ -1,10 +1,10 @@
 """Snooze management — defer items to resurface later."""
 
 from __future__ import annotations
-from typing import Any
 
 import uuid
 from datetime import datetime, timedelta
+from typing import Any
 
 from . import db
 

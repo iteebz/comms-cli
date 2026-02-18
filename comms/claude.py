@@ -1,4 +1,5 @@
 from typing import Any
+
 """Headless Claude invocation for draft generation and summarization."""
 
 import subprocess

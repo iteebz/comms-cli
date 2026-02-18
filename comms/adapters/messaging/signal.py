@@ -1,10 +1,10 @@
-from typing import Any
 import io
 import json
 import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import qrcode
 

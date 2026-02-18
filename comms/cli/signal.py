@@ -15,7 +15,7 @@ app = typer.Typer()
 def messages(
     phone: str = typer.Option(None, "--phone", "-p", help="Signal phone number"),
     timeout: int = typer.Option(5, "--timeout", "-t", help="Receive timeout in seconds"),
-):
+) -> None:
     """Receive new Signal messages and store them"""
     phone = get_signal_phone(phone)
 
@@ -35,7 +35,7 @@ def messages(
 @app.command()
 def signal_inbox(
     phone: str = typer.Option(None, "--phone", "-p"),
-):
+) -> None:
     """Show Signal conversations"""
     phone = get_signal_phone(phone)
 
@@ -57,7 +57,7 @@ def signal_history(
     contact: str = typer.Argument(..., help="Phone number to view history with"),
     phone: str = typer.Option(None, "--phone", "-p"),
     limit: int = typer.Option(20, "--limit", "-n"),
-):
+) -> None:
     """Show message history with a contact"""
     phone = get_signal_phone(phone)
 
@@ -80,7 +80,7 @@ def signal_send(
     message: str = typer.Option(..., "--message", "-m", help="Message to send"),
     phone: str = typer.Option(None, "--phone", "-p"),
     group: bool = typer.Option(False, "--group", "-g", help="Send to group"),
-):
+) -> None:
     """Send Signal message"""
     phone = get_signal_phone(phone)
 
@@ -101,7 +101,7 @@ def signal_reply(
     message_id: str = typer.Argument(..., help="Message ID to reply to"),
     message: str = typer.Option(..., "--message", "-m", help="Reply message"),
     phone: str = typer.Option(None, "--phone", "-p"),
-):
+) -> None:
     """Reply to a Signal message"""
     phone = get_signal_phone(phone)
 
@@ -121,7 +121,7 @@ def signal_draft(
     contact: str = typer.Argument(..., help="Phone number to reply to"),
     instructions: str = typer.Option(None, "--instructions", "-i", help="Instructions for Claude"),
     phone: str = typer.Option(None, "--phone", "-p"),
-):
+) -> None:
     """Generate Signal reply using Claude"""
     from .. import claude
 
@@ -153,7 +153,7 @@ def signal_draft(
 
 
 @app.command()
-def signal_contacts(phone: str = typer.Option(None, "--phone", "-p")):
+def signal_contacts(phone: str = typer.Option(None, "--phone", "-p")) -> None:
     """List Signal contacts"""
     phone = get_signal_phone(phone)
     contacts = signal_module.list_contacts(phone)
@@ -168,7 +168,7 @@ def signal_contacts(phone: str = typer.Option(None, "--phone", "-p")):
 
 
 @app.command()
-def signal_groups(phone: str = typer.Option(None, "--phone", "-p")):
+def signal_groups(phone: str = typer.Option(None, "--phone", "-p")) -> None:
     """List Signal groups"""
     phone = get_signal_phone(phone)
     groups = signal_module.list_groups(phone)
@@ -181,7 +181,7 @@ def signal_groups(phone: str = typer.Option(None, "--phone", "-p")):
 
 
 @app.command()
-def signal_status():
+def signal_status() -> None:
     """Check Signal connection status"""
     accounts = signal_module.list_accounts()
     if not accounts:

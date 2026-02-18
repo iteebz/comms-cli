@@ -1,7 +1,7 @@
-from typing import Any
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 PLIST_NAME = "com.comms-cli.daemon.plist"
 LAUNCHD_DIR = Path.home() / "Library/LaunchAgents"

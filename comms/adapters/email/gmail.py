@@ -1,10 +1,10 @@
-from typing import Any, cast
 import base64
 import hashlib
 import json
 from datetime import datetime
 from email.mime.text import MIMEText
 from pathlib import Path
+from typing import Any, cast
 
 import keyring
 from google.auth.transport.requests import Request
@@ -139,7 +139,9 @@ def count_inbox_threads(email_addr: str) -> int:
     return label.get("threadsTotal", 0)
 
 
-def list_threads(email_addr: str, label: str = "inbox", max_results: int = 50) -> list[dict[str, Any]]:
+def list_threads(
+    email_addr: str, label: str = "inbox", max_results: int = 50
+) -> list[dict[str, Any]]:
     creds, _ = _get_credentials(email_addr)
     service = build("gmail", "v1", credentials=creds)
 

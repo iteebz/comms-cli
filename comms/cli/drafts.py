@@ -11,7 +11,7 @@ app = typer.Typer()
 
 
 @app.command()
-def drafts_list():
+def drafts_list() -> None:
     """List pending drafts"""
     pending = drafts_module.list_pending_drafts()
     if not pending:
@@ -26,7 +26,7 @@ def drafts_list():
 
 
 @app.command()
-def draft_show(draft_id: str):
+def draft_show(draft_id: str) -> None:
     """Show draft details"""
     draft = drafts_module.get_draft(draft_id)
     if not draft:
@@ -56,7 +56,7 @@ def compose(
     body: str = typer.Option(None, "--body", "-b"),
     cc: str = typer.Option(None, "--cc"),
     email: str = typer.Option(None, "--email", "-e"),
-):
+) -> None:
     """Compose new email draft"""
     if not body:
         typer.echo("Error: --body required")
@@ -81,7 +81,7 @@ def compose(
 
 
 @app.command()
-def approve_draft(draft_id: str):
+def approve_draft(draft_id: str) -> None:
     """Approve draft for sending"""
     full_id = drafts_module.resolve_draft_id(draft_id) or draft_id
     draft = drafts_module.get_draft(full_id)
@@ -109,7 +109,7 @@ def reply(
     body: str = typer.Option(None, "--body", "-b"),
     email: str = typer.Option(None, "--email", "-e"),
     reply_all: bool = typer.Option(False, "--all", "-a", help="Reply to all recipients"),
-):
+) -> None:
     """Reply to thread"""
     if not body:
         typer.echo("Error: --body required")
@@ -133,7 +133,7 @@ def draft_reply(
     instructions: str = typer.Option(None, "--instructions", "-i", help="Instructions for Claude"),
     email: str = typer.Option(None, "--email", "-e"),
     reply_all: bool = typer.Option(False, "--all", "-a", help="Reply to all recipients"),
-):
+) -> None:
     """Generate reply draft using Claude"""
     from comms import claude
 
@@ -175,7 +175,7 @@ def draft_reply(
 
 
 @app.command()
-def send(draft_id: str):
+def send(draft_id: str) -> None:
     """Send approved draft"""
     full_id = drafts_module.resolve_draft_id(draft_id) or draft_id
     draft = drafts_module.get_draft(full_id)

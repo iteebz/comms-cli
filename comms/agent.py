@@ -1,10 +1,10 @@
 """Agent bus — parse Signal messages as commands, execute, respond."""
 
 from __future__ import annotations
-from typing import Any
 
 import subprocess
 from dataclasses import dataclass
+from typing import Any
 
 from .config import COMMS_DIR
 
@@ -188,7 +188,9 @@ def execute_command(cmd: Command) -> CommandResult:
     if action in COMMAND_MAP:
         comms_cmd = COMMAND_MAP[action]
         if comms_cmd is None:
-            return CommandResult(success=False, message=f"No command mapped for: {action}", executed=action)
+            return CommandResult(
+                success=False, message=f"No command mapped for: {action}", executed=action
+            )
         success, output = _run_comms_command(comms_cmd)
         return CommandResult(success=success, message=output, executed=comms_cmd)
 

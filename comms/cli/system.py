@@ -13,7 +13,7 @@ from comms.adapters.email import gmail, outlook
 app = typer.Typer()
 
 
-def show_dashboard():
+def show_dashboard() -> None:
     accounts = accts_module.list_accounts("email")
     total_inbox = 0
 
@@ -40,7 +40,7 @@ def show_dashboard():
 
 
 @app.command()
-def inbox(limit: int = typer.Option(20, "--limit", "-n")):
+def inbox(limit: int = typer.Option(20, "--limit", "-n")) -> None:
     """Unified inbox (email + signal, sorted by time)"""
     items = services.get_unified_inbox(limit=limit)
     if not items:
@@ -55,14 +55,14 @@ def inbox(limit: int = typer.Option(20, "--limit", "-n")):
 
 
 @app.command()
-def init():
+def init() -> None:
     """Initialize comms database and config"""
     db.init()
     typer.echo("Initialized comms database")
 
 
 @app.command()
-def backup():
+def backup() -> None:
     """Backup database to ~/.comms_backups/{timestamp}/"""
     backup_path = db.backup_db()
     if backup_path:
@@ -72,7 +72,7 @@ def backup():
 
 
 @app.command()
-def rules():
+def rules() -> None:
     """Show triage rules (edit at ~/.comms/rules.md)"""
     from comms.config import RULES_PATH
 
@@ -84,7 +84,7 @@ def rules():
 
 
 @app.command()
-def contacts():
+def contacts() -> None:
     """Show contact notes (edit at ~/.comms/contacts.md)"""
     from comms.contacts import CONTACTS_PATH, get_all_contacts
 
@@ -112,7 +112,7 @@ def contacts():
 
 
 @app.command()
-def templates(init: bool = typer.Option(False, "--init", help="Create default templates file")):
+def templates(init: bool = typer.Option(False, "--init", help="Create default templates file")) -> None:
     """Show reply templates (edit at ~/.comms/templates.md)"""
     from comms.templates import TEMPLATES_PATH, get_templates, init_templates
 
@@ -133,7 +133,7 @@ def templates(init: bool = typer.Option(False, "--init", help="Create default te
 
 
 @app.command()
-def status():
+def status() -> None:
     """Show system status"""
     from comms.config import get_policy
 
@@ -160,7 +160,7 @@ def auto_approve(
     threshold: float | None = typer.Option(None, "--threshold", "-t", help="Accuracy threshold"),
     min_samples: int | None = typer.Option(None, "--min-samples", "-n", help="Minimum samples"),
     action: list[str] | None = None,
-):
+) -> None:
     """Configure auto-approve settings"""
     from comms.config import get_policy, set_policy
 
@@ -186,7 +186,7 @@ def auto_approve(
 
 
 @app.command()
-def stats():
+def stats() -> None:
     """Show learning stats from decisions"""
     from comms import learning
 
@@ -214,7 +214,7 @@ def stats():
 
 
 @app.command()
-def senders(limit: int = typer.Option(20, "--limit", "-n")):
+def senders(limit: int = typer.Option(20, "--limit", "-n")) -> None:
     """Show sender statistics and priority scores"""
     from comms import senders
 
@@ -241,7 +241,7 @@ def senders(limit: int = typer.Option(20, "--limit", "-n")):
 
 
 @app.command()
-def audit_log(limit: int = 20):
+def audit_log(limit: int = 20) -> None:
     """Show recent audit log"""
     from comms import audit
 
@@ -254,7 +254,7 @@ def audit_log(limit: int = 20):
 
 
 @app.command()
-def digest(days: int = typer.Option(7, "--days", "-d", help="Number of days to summarize")):
+def digest(days: int = typer.Option(7, "--days", "-d", help="Number of days to summarize")) -> None:
     """Weekly activity digest"""
     from comms import digest as digest_module
 
@@ -268,7 +268,7 @@ def triage(
     confidence: float = typer.Option(0.7, "--confidence", "-c", help="Minimum confidence"),
     dry_run: bool = typer.Option(False, "--dry-run", "-d", help="Show proposals without creating"),
     auto_execute: bool = typer.Option(False, "--execute", "-x", help="Auto-execute after approval"),
-):
+) -> None:
     """Triage inbox — Claude bulk-proposes actions"""
     from comms import triage as triage_module
 
@@ -311,7 +311,7 @@ def clear(
     limit: int = typer.Option(50, "--limit", "-n", help="Max items to process"),
     confidence: float = typer.Option(0.8, "--confidence", "-c", help="Auto-approve threshold"),
     dry_run: bool = typer.Option(False, "--dry-run", "-d", help="Show what would happen"),
-):
+) -> None:
     """One-command inbox clear: triage → approve → execute"""
     from comms import proposals as proposals_module
     from comms import triage as triage_module

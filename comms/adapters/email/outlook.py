@@ -1,9 +1,8 @@
 """Outlook adapter via Microsoft Graph API."""
 
-from typing import Any
-
 import re
 from datetime import datetime
+from typing import Any
 
 import keyring
 import msal
@@ -74,7 +73,9 @@ def _get_access_token(email: str) -> str | None:
     return None
 
 
-def _api_get(email: str, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
+def _api_get(
+    email: str, endpoint: str, params: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
     token = _get_access_token(email)
     if not token:
         return None

@@ -1,5 +1,5 @@
-from typing import Any
 import uuid
+from typing import Any
 
 from .config import add_account as config_add_account
 from .db import get_db

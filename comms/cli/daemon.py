@@ -6,7 +6,7 @@ app = typer.Typer()
 
 
 @app.command()
-def agent_authorize(phone: str = typer.Argument(..., help="Phone number to authorize")):
+def agent_authorize(phone: str = typer.Argument(..., help="Phone number to authorize")) -> None:
     """Authorize a phone number to send commands"""
     from .. import agent
 
@@ -15,7 +15,7 @@ def agent_authorize(phone: str = typer.Argument(..., help="Phone number to autho
 
 
 @app.command()
-def agent_revoke(phone: str = typer.Argument(..., help="Phone number to revoke")):
+def agent_revoke(phone: str = typer.Argument(..., help="Phone number to revoke")) -> None:
     """Revoke command authorization from a phone number"""
     from .. import agent
 
@@ -26,7 +26,7 @@ def agent_revoke(phone: str = typer.Argument(..., help="Phone number to revoke")
 
 
 @app.command()
-def agent_list():
+def agent_list() -> None:
     """List authorized command senders"""
     from .. import agent
 
@@ -44,7 +44,7 @@ def agent_list():
 def agent_config(
     enable: bool | None = typer.Option(None, "--enable/--disable", help="Enable or disable agent"),
     nlp: bool | None = typer.Option(None, "--nlp/--no-nlp", help="Enable natural language parsing"),
-):
+) -> None:
     """Configure agent settings"""
     from comms.config import get_agent_config, set_agent_config
 
@@ -65,7 +65,7 @@ def agent_config(
 def daemon_start(
     interval: int = typer.Option(5, "--interval", "-i", help="Polling interval in seconds"),
     foreground: bool = typer.Option(False, "--foreground", "-f", help="Run in foreground"),
-):
+) -> None:
     """Start Signal daemon (background polling)"""
     from comms import daemon
 
@@ -76,7 +76,7 @@ def daemon_start(
 
 
 @app.command()
-def daemon_stop():
+def daemon_stop() -> None:
     """Stop Signal daemon"""
     from comms import daemon
 
@@ -87,7 +87,7 @@ def daemon_stop():
 
 
 @app.command()
-def daemon_status():
+def daemon_status() -> None:
     """Show daemon status"""
     from comms import daemon, launchd
 
@@ -113,7 +113,7 @@ def daemon_status():
 @app.command()
 def daemon_install(
     interval: int = typer.Option(5, "--interval", "-i", help="Polling interval"),
-):
+) -> None:
     """Install daemon as launchd service (auto-start on boot)"""
     from comms import launchd
 
@@ -124,7 +124,7 @@ def daemon_install(
 
 
 @app.command()
-def daemon_uninstall():
+def daemon_uninstall() -> None:
     """Uninstall daemon launchd service"""
     from comms import launchd
 

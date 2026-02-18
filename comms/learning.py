@@ -1,6 +1,6 @@
-from typing import Any
 import json
 from dataclasses import dataclass
+from typing import Any
 
 from . import config
 from .db import get_db

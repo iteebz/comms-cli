@@ -19,7 +19,7 @@ def link(
     client_secret: str = typer.Option(
         None, "--client-secret", help="OAuth Client Secret (Outlook)"
     ),
-):
+) -> None:
     """Link email or messaging account"""
     if provider not in ["gmail", "outlook", "signal"]:
         typer.echo(f"Unknown provider: {provider}")
@@ -95,7 +95,7 @@ def link(
 
 
 @app.command()
-def accounts():
+def accounts() -> None:
     """List all accounts"""
     accts = accts_module.list_accounts()
     if not accts:
@@ -108,7 +108,7 @@ def accounts():
 
 
 @app.command()
-def unlink(account_id: str):
+def unlink(account_id: str) -> None:
     """Unlink account by ID or email"""
     accounts = accts_module.list_accounts()
     matching = [

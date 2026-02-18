@@ -14,7 +14,7 @@ def review(
     action: str = typer.Option(
         None, "--action", "-a", help="Filter by action: delete, archive, flag"
     ),
-):
+) -> None:
     """Review proposals"""
     proposals = proposals_module.list_proposals(status=status)
 
@@ -48,7 +48,7 @@ def propose(
     entity_type: str,
     entity_id: str,
     agent: str = typer.Option(None, "--agent", help="Agent reasoning"),
-):
+) -> None:
     """Create proposal"""
     proposal_id, error, auto_approved = proposals_module.create_proposal(
         entity_type=entity_type,
@@ -73,7 +73,7 @@ def approve(
     human: str = typer.Option(None, "--human", help="Human reasoning for approval"),
     all_pending: bool = typer.Option(False, "--all", help="Approve all pending proposals"),
     action: str = typer.Option(None, "--action", "-a", help="Approve all with this action"),
-):
+) -> None:
     """Approve proposal(s)"""
     if all_pending or action:
         pending_proposals = proposals_module.list_proposals(status="pending")
@@ -111,7 +111,7 @@ def reject(
     ),
     all_pending: bool = typer.Option(False, "--all", help="Reject all pending proposals"),
     action: str = typer.Option(None, "--action", "-a", help="Reject all with this action"),
-):
+) -> None:
     """Reject proposal(s) (optionally with correction)"""
     if all_pending or action:
         pending_proposals = proposals_module.list_proposals(status="pending")
@@ -146,7 +146,7 @@ def reject(
 
 
 @app.command()
-def resolve():
+def resolve() -> None:
     """Execute all approved proposals"""
     approved = proposals_module.get_approved_proposals()
     if not approved:

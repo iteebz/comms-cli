@@ -22,7 +22,7 @@ app = typer.Typer(
 
 
 @app.callback(invoke_without_command=True)
-def _main_callback(ctx: typer.Context):
+def _main_callback(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is None:
         show_dashboard()
 
@@ -36,7 +36,7 @@ app.add_typer(daemon_app, name="")
 app.add_typer(proposals_app, name="")
 
 
-def main():
+def main() -> None:
     db.init()
     app()
 
