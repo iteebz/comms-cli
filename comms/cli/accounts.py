@@ -26,16 +26,6 @@ def link(
         raise typer.Exit(1)
 
     if provider == "signal":
-        existing = signal.list_accounts()
-        if existing:
-            typer.echo(f"Signal accounts already linked: {existing}")
-            for phone in existing:
-                registered = accts_module.list_accounts("messaging")
-                if not any(account["email"] == phone for account in registered):
-                    account_id = accts_module.add_messaging_account("signal", phone)
-                    typer.echo(f"Added existing account: {phone} ({account_id[:8]})")
-            return
-
         typer.echo("Linking Signal as secondary device...")
         typer.echo("Open Signal on your phone -> Settings -> Linked Devices -> Link New Device")
         typer.echo("Then scan the QR code that will appear.")

@@ -23,6 +23,14 @@ def add_email_account(provider: str, email: str) -> str:
 
 
 def add_messaging_account(provider: str, identifier: str) -> str:
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT id FROM accounts WHERE provider = ? AND email = ?",
+            (provider, identifier),
+        ).fetchone()
+        if existing:
+            return existing["id"]
+
     account_id = str(uuid.uuid4())
 
     with get_db() as conn:
