@@ -18,33 +18,35 @@ def drafts_list():
         typer.echo("No pending drafts")
         return
 
-    for d in pending:
-        status = "✓ approved" if d.approved_at else "⧗ pending"
-        typer.echo(f"{d.id[:8]} | {d.to_addr} | {d.subject or '(no subject)'} | {status}")
+    for draft in pending:
+        status = "✓ approved" if draft.approved_at else "⧗ pending"
+        typer.echo(
+            f"{draft.id[:8]} | {draft.to_addr} | {draft.subject or '(no subject)'} | {status}"
+        )
 
 
 @app.command()
 def draft_show(draft_id: str):
     """Show draft details"""
-    d = drafts_module.get_draft(draft_id)
-    if not d:
+    draft = drafts_module.get_draft(draft_id)
+    if not draft:
         typer.echo(f"Draft {draft_id} not found")
         raise typer.Exit(1)
 
-    typer.echo(f"To: {d.to_addr}")
-    if d.cc_addr:
-        typer.echo(f"Cc: {d.cc_addr}")
-    typer.echo(f"Subject: {d.subject or '(no subject)'}")
-    typer.echo(f"\n{d.body}\n")
+    typer.echo(f"To: {draft.to_addr}")
+    if draft.cc_addr:
+        typer.echo(f"Cc: {draft.cc_addr}")
+    typer.echo(f"Subject: {draft.subject or '(no subject)'}")
+    typer.echo(f"\n{draft.body}\n")
 
-    if d.claude_reasoning:
-        typer.echo(f"--- Claude reasoning ---\n{d.claude_reasoning}")
+    if draft.claude_reasoning:
+        typer.echo(f"--- Claude reasoning ---\n{draft.claude_reasoning}")
 
-    typer.echo(f"\nCreated: {d.created_at}")
-    if d.approved_at:
-        typer.echo(f"Approved: {d.approved_at}")
-    if d.sent_at:
-        typer.echo(f"Sent: {d.sent_at}")
+    typer.echo(f"\nCreated: {draft.created_at}")
+    if draft.approved_at:
+        typer.echo(f"Approved: {draft.approved_at}")
+    if draft.sent_at:
+        typer.echo(f"Sent: {draft.sent_at}")
 
 
 @app.command()
@@ -82,18 +84,18 @@ def compose(
 def approve_draft(draft_id: str):
     """Approve draft for sending"""
     full_id = drafts_module.resolve_draft_id(draft_id) or draft_id
-    d = drafts_module.get_draft(full_id)
-    if not d:
+    draft = drafts_module.get_draft(full_id)
+    if not draft:
         typer.echo(f"Draft {draft_id} not found")
         raise typer.Exit(1)
 
-    if d.approved_at:
+    if draft.approved_at:
         typer.echo("Draft already approved")
         return
 
-    allowed, msg = policy.check_recipient_allowed(d.to_addr)
+    allowed, error_msg = policy.check_recipient_allowed(draft.to_addr)
     if not allowed:
-        typer.echo(f"Cannot approve draft: {msg}")
+        typer.echo(f"Cannot approve draft: {error_msg}")
         raise typer.Exit(1)
 
     drafts_module.approve_draft(full_id)
@@ -136,26 +138,30 @@ def draft_reply(
     from comms import claude
 
     full_id = run_service(services.resolve_thread_id, thread_id, email) or thread_id
-    messages = run_service(services.fetch_thread, full_id, email)
+    thread_messages = run_service(services.fetch_thread, full_id, email)
 
     context_lines = []
-    for msg in messages[-5:]:
-        context_lines.append(f"From: {msg['from']}")
-        context_lines.append(f"Date: {msg['date']}")
-        context_lines.append(f"Body: {msg['body'][:500]}")
+    for message in thread_messages[-5:]:
+        context_lines.append(f"From: {message['from']}")
+        context_lines.append(f"Date: {message['date']}")
+        context_lines.append(f"Body: {message['body'][:500]}")
         context_lines.append("---")
 
     context = "\n".join(context_lines)
 
     typer.echo("Generating draft...")
-    body, reasoning = claude.generate_reply(context, instructions)
+    reply_body, reasoning = claude.generate_reply(context, instructions)
 
-    if not body:
+    if not reply_body:
         typer.echo(f"Failed: {reasoning}")
         raise typer.Exit(1)
 
     draft_id, to_addr, reply_subject, cc_addr = run_service(
-        services.reply_to_thread, thread_id=full_id, body=body, email=email, reply_all=reply_all
+        services.reply_to_thread,
+        thread_id=full_id,
+        body=reply_body,
+        email=email,
+        reply_all=reply_all,
     )
 
     typer.echo(f"\nReasoning: {reasoning}")
@@ -164,7 +170,7 @@ def draft_reply(
     if cc_addr:
         typer.echo(f"Cc: {cc_addr}")
     typer.echo(f"Subject: {reply_subject}")
-    typer.echo(f"\n{body}\n")
+    typer.echo(f"\n{reply_body}\n")
     typer.echo(f"Run `comms approve {draft_id[:8]}` to approve")
 
 
@@ -172,11 +178,11 @@ def draft_reply(
 def send(draft_id: str):
     """Send approved draft"""
     full_id = drafts_module.resolve_draft_id(draft_id) or draft_id
-    d = drafts_module.get_draft(full_id)
-    if not d:
+    draft = drafts_module.get_draft(full_id)
+    if not draft:
         typer.echo(f"Draft {draft_id} not found")
         raise typer.Exit(1)
 
     run_service(services.send_draft, full_id)
-    typer.echo(f"Sent: {d.to_addr}")
-    typer.echo(f"Subject: {d.subject}")
+    typer.echo(f"Sent: {draft.to_addr}")
+    typer.echo(f"Subject: {draft.subject}")

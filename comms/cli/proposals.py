@@ -16,28 +16,30 @@ def review(
     ),
 ):
     """Review proposals"""
-    props = proposals_module.list_proposals(status=status)
+    proposals = proposals_module.list_proposals(status=status)
 
     if action:
-        props = [p for p in props if p["proposed_action"] == action]
+        proposals = [p for p in proposals if p["proposed_action"] == action]
 
-    if not props:
+    if not proposals:
         typer.echo("No proposals")
         return
 
-    by_action = {}
-    for p in props:
-        a = p["proposed_action"]
-        if a not in by_action:
-            by_action[a] = []
-        by_action[a].append(p)
+    proposals_by_action = {}
+    for proposal in proposals:
+        action_type = proposal["proposed_action"]
+        if action_type not in proposals_by_action:
+            proposals_by_action[action_type] = []
+        proposals_by_action[action_type].append(proposal)
 
-    for act in ["flag", "archive", "delete"]:
-        if act not in by_action:
+    for action_type in ["flag", "archive", "delete"]:
+        if action_type not in proposals_by_action:
             continue
-        typer.echo(f"\n=== {act.upper()} ({len(by_action[act])}) ===")
-        for p in by_action[act]:
-            typer.echo(f"  {p['id'][:8]} | {p['agent_reasoning'] or p['entity_id'][:8]}")
+        typer.echo(f"\n=== {action_type.upper()} ({len(proposals_by_action[action_type])}) ===")
+        for proposal in proposals_by_action[action_type]:
+            typer.echo(
+                f"  {proposal['id'][:8]} | {proposal['agent_reasoning'] or proposal['entity_id'][:8]}"
+            )
 
 
 @app.command()
@@ -74,19 +76,19 @@ def approve(
 ):
     """Approve proposal(s)"""
     if all_pending or action:
-        props = proposals_module.list_proposals(status="pending")
+        pending_proposals = proposals_module.list_proposals(status="pending")
         if action:
-            props = [p for p in props if p["proposed_action"] == action]
+            pending_proposals = [p for p in pending_proposals if p["proposed_action"] == action]
 
-        if not props:
+        if not pending_proposals:
             typer.echo("No matching proposals")
             return
 
-        count = 0
-        for p in props:
-            if proposals_module.approve_proposal(p["id"], user_reasoning=human):
-                count += 1
-        typer.echo(f"Approved {count} proposals")
+        approved_count = 0
+        for proposal in pending_proposals:
+            if proposals_module.approve_proposal(proposal["id"], user_reasoning=human):
+                approved_count += 1
+        typer.echo(f"Approved {approved_count} proposals")
         return
 
     if not proposal_id:
@@ -112,19 +114,21 @@ def reject(
 ):
     """Reject proposal(s) (optionally with correction)"""
     if all_pending or action:
-        props = proposals_module.list_proposals(status="pending")
+        pending_proposals = proposals_module.list_proposals(status="pending")
         if action:
-            props = [p for p in props if p["proposed_action"] == action]
+            pending_proposals = [p for p in pending_proposals if p["proposed_action"] == action]
 
-        if not props:
+        if not pending_proposals:
             typer.echo("No matching proposals")
             return
 
-        count = 0
-        for p in props:
-            if proposals_module.reject_proposal(p["id"], user_reasoning=human, correction=correct):
-                count += 1
-        typer.echo(f"Rejected {count} proposals")
+        rejected_count = 0
+        for proposal in pending_proposals:
+            if proposals_module.reject_proposal(
+                proposal["id"], user_reasoning=human, correction=correct
+            ):
+                rejected_count += 1
+        typer.echo(f"Rejected {rejected_count} proposals")
         return
 
     if not proposal_id:

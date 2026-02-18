@@ -20,13 +20,13 @@ def messages(
     phone = get_signal_phone(phone)
 
     typer.echo(f"Receiving messages for {phone}...")
-    msgs = signal_module.receive(phone, timeout=timeout)
+    new_messages = signal_module.receive(phone, timeout=timeout)
 
-    if msgs:
-        typer.echo(f"Received {len(msgs)} new message(s)")
-        for msg in msgs:
-            sender = msg.get("from_name") or msg.get("from", "Unknown")
-            body = msg.get("body", "")
+    if new_messages:
+        typer.echo(f"Received {len(new_messages)} new message(s)")
+        for message in new_messages:
+            sender = message.get("from_name") or message.get("from", "Unknown")
+            body = message.get("body", "")
             typer.echo(f"  {sender}: {body}")
     else:
         typer.echo("No new messages")
@@ -39,17 +39,17 @@ def signal_inbox(
     """Show Signal conversations"""
     phone = get_signal_phone(phone)
 
-    convos = signal_module.get_conversations(phone)
-    if not convos:
+    conversations = signal_module.get_conversations(phone)
+    if not conversations:
         typer.echo("No conversations yet. Run: comms messages")
         return
 
-    for c in convos:
-        name = c["sender_name"] or c["sender_phone"]
-        unread = c["unread_count"]
-        count = c["message_count"]
+    for conversation in conversations:
+        name = conversation["sender_name"] or conversation["sender_phone"]
+        unread = conversation["unread_count"]
+        count = conversation["message_count"]
         unread_str = f" ({unread} unread)" if unread else ""
-        typer.echo(f"{c['sender_phone']:16} | {name:20} | {count} msgs{unread_str}")
+        typer.echo(f"{conversation['sender_phone']:16} | {name:20} | {count} msgs{unread_str}")
 
 
 @app.command()
@@ -61,17 +61,17 @@ def signal_history(
     """Show message history with a contact"""
     phone = get_signal_phone(phone)
 
-    msgs = signal_module.get_messages(phone=phone, sender=contact, limit=limit)
-    if not msgs:
+    history_messages = signal_module.get_messages(phone=phone, sender=contact, limit=limit)
+    if not history_messages:
         typer.echo(f"No messages from {contact}")
         return
 
-    msgs.reverse()
-    for msg in msgs:
-        sender = msg["sender_name"] or msg["sender_phone"]
-        ts = datetime.fromtimestamp(msg["timestamp"] / 1000).strftime("%m-%d %H:%M")
-        msg_id = msg["id"][:8] if msg.get("id") else ""
-        typer.echo(f"{msg_id} [{ts}] {sender}: {msg['body']}")
+    history_messages.reverse()
+    for message in history_messages:
+        sender = message["sender_name"] or message["sender_phone"]
+        timestamp = datetime.fromtimestamp(message["timestamp"] / 1000).strftime("%m-%d %H:%M")
+        message_id = message["id"][:8] if message.get("id") else ""
+        typer.echo(f"{message_id} [{timestamp}] {sender}: {message['body']}")
 
 
 @app.command()
@@ -85,14 +85,14 @@ def signal_send(
     phone = get_signal_phone(phone)
 
     if group:
-        success, msg = signal_module.send_group(phone, recipient, message)
+        success, error_msg = signal_module.send_group(phone, recipient, message)
     else:
-        success, msg = signal_module.send(phone, recipient, message)
+        success, error_msg = signal_module.send(phone, recipient, message)
 
     if success:
         typer.echo(f"Sent to {recipient}")
     else:
-        typer.echo(f"Failed: {msg}")
+        typer.echo(f"Failed: {error_msg}")
         raise typer.Exit(1)
 
 
@@ -105,14 +105,14 @@ def signal_reply(
     """Reply to a Signal message"""
     phone = get_signal_phone(phone)
 
-    success, result, original = signal_module.reply(phone, message_id, message)
+    success, error_msg, original_message = signal_module.reply(phone, message_id, message)
 
-    if success and original:
-        sender = original["sender_name"] or original["sender_phone"]
+    if success and original_message:
+        sender = original_message["sender_name"] or original_message["sender_phone"]
         typer.echo(f"Replied to {sender}")
-        typer.echo(f"  Original: {original['body'][:50]}...")
+        typer.echo(f"  Original: {original_message['body'][:50]}...")
     else:
-        typer.echo(f"Failed: {result}")
+        typer.echo(f"Failed: {error_msg}")
         raise typer.Exit(1)
 
 
@@ -126,29 +126,29 @@ def signal_draft(
     from .. import claude
 
     phone = get_signal_phone(phone)
-    msgs = signal_module.get_messages(phone=phone, sender=contact, limit=10)
+    conversation_history = signal_module.get_messages(phone=phone, sender=contact, limit=10)
 
-    if not msgs:
+    if not conversation_history:
         typer.echo(f"No messages from {contact}")
         raise typer.Exit(1)
 
     typer.echo("Generating reply...")
-    body, reasoning = claude.generate_signal_reply(msgs, instructions)
+    reply_body, reasoning = claude.generate_signal_reply(conversation_history, instructions)
 
-    if not body:
+    if not reply_body:
         typer.echo(f"Failed: {reasoning}")
         raise typer.Exit(1)
 
     typer.echo(f"\nReasoning: {reasoning}")
     typer.echo(f"\nDraft reply to {contact}:")
-    typer.echo(f"  {body}\n")
+    typer.echo(f"  {reply_body}\n")
 
     if typer.confirm("Send this reply?"):
-        success, result = signal_module.send(phone, contact, body)
+        success, error_msg = signal_module.send(phone, contact, reply_body)
         if success:
             typer.echo("Sent!")
         else:
-            typer.echo(f"Failed: {result}")
+            typer.echo(f"Failed: {error_msg}")
             raise typer.Exit(1)
 
 
@@ -161,9 +161,9 @@ def signal_contacts(phone: str = typer.Option(None, "--phone", "-p")):
         typer.echo("No contacts")
         return
 
-    for c in contacts:
-        name = c.get("name", "")
-        number = c.get("number", "")
+    for contact in contacts:
+        name = contact.get("name", "")
+        number = contact.get("number", "")
         typer.echo(f"{number:20} {name}")
 
 
@@ -176,8 +176,8 @@ def signal_groups(phone: str = typer.Option(None, "--phone", "-p")):
         typer.echo("No groups")
         return
 
-    for g in groups:
-        typer.echo(f"{g.get('id', '')[:16]} | {g.get('name', '')}")
+    for group in groups:
+        typer.echo(f"{group.get('id', '')[:16]} | {group.get('name', '')}")
 
 
 @app.command()
@@ -190,6 +190,6 @@ def signal_status():
         return
 
     for phone in accounts:
-        success, msg = signal_module.test_connection(phone)
-        status = "OK" if success else f"FAIL: {msg}"
+        success, error_msg = signal_module.test_connection(phone)
+        status = "OK" if success else f"FAIL: {error_msg}"
         typer.echo(f"{phone}: {status}")

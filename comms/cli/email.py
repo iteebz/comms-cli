@@ -25,24 +25,24 @@ def threads(
             typer.echo("  No threads")
             continue
 
-        for t in thread_list:
-            date_str = t.get("date", "")[:16]
-            typer.echo(f"  {t['id'][:8]} | {date_str:16} | {t['snippet'][:50]}")
+        for thread in thread_list:
+            date_str = thread.get("date", "")[:16]
+            typer.echo(f"  {thread['id'][:8]} | {date_str:16} | {thread['snippet'][:50]}")
 
 
 @app.command()
 def thread(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Fetch and display full thread"""
     full_id = run_service(services.resolve_thread_id, thread_id, email) or thread_id
-    messages = run_service(services.fetch_thread, full_id, email)
+    thread_messages = run_service(services.fetch_thread, full_id, email)
 
-    typer.echo(f"\nThread: {messages[0]['subject']}")
+    typer.echo(f"\nThread: {thread_messages[0]['subject']}")
     typer.echo("=" * 80)
 
-    for msg in messages:
-        typer.echo(f"\nFrom: {msg['from']}")
-        typer.echo(f"Date: {msg['date']}")
-        typer.echo(f"\n{msg['body']}\n")
+    for message in thread_messages:
+        typer.echo(f"\nFrom: {message['from']}")
+        typer.echo(f"Date: {message['date']}")
+        typer.echo(f"\n{message['body']}\n")
         typer.echo("-" * 80)
 
 
@@ -52,10 +52,10 @@ def summarize(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     from comms import claude
 
     full_id = run_service(services.resolve_thread_id, thread_id, email) or thread_id
-    messages = run_service(services.fetch_thread, full_id, email)
+    thread_messages = run_service(services.fetch_thread, full_id, email)
 
-    typer.echo(f"Summarizing {len(messages)} messages...")
-    summary = claude.summarize_thread(messages)
+    typer.echo(f"Summarizing {len(thread_messages)} messages...")
+    summary = claude.summarize_thread(thread_messages)
     typer.echo(f"\n{summary}")
 
 
