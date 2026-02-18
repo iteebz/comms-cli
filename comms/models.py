@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 
-@dataclass
+@dataclass(frozen=True)
 class Account:
     id: str
     service_type: str
@@ -13,7 +13,7 @@ class Account:
     created_at: datetime
 
 
-@dataclass
+@dataclass(frozen=True)
 class Thread:
     id: str
     account_id: str
@@ -24,7 +24,7 @@ class Thread:
     created_at: datetime
 
 
-@dataclass
+@dataclass(frozen=True)
 class Message:
     id: str
     thread_id: str
@@ -41,7 +41,7 @@ class Message:
     synced_at: datetime
 
 
-@dataclass
+@dataclass(frozen=True)
 class Draft:
     id: str
     thread_id: str | None
