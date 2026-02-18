@@ -7,70 +7,33 @@ from .adapters.email import gmail
 from .adapters.messaging import signal
 from .db import get_db, now_iso
 
-VALID_THREAD_ACTIONS = {"archive", "delete", "flag", "unflag", "unarchive", "undelete"}
-VALID_DRAFT_ACTIONS = {"approve", "send", "delete"}
-VALID_SIGNAL_ACTIONS = {"mark_read", "ignore"}
+VALID_ACTIONS = {
+    "thread": {"archive", "delete", "flag", "unflag", "unarchive", "undelete"},
+    "draft": {"approve", "send", "delete"},
+    "signal_message": {"mark_read", "ignore"},
+}
 
 
 def _validate_entity(entity_type: str, entity_id: str, email: str | None) -> tuple[bool, str]:
-    if entity_type == "thread":
-        account, error = accts_module.select_email_account(email)
-        if not account:
-            return False, error or "No email account found"
-
-        try:
-            if account["provider"] == "gmail":
-                email_addr = account.get("email") or email or ""
-                messages = gmail.fetch_thread_messages(entity_id, email_addr)
-                if not messages:
-                    return False, f"Thread {entity_id} not found"
-                return True, ""
-            return False, f"Provider {account['provider']} not supported for validation"
-        except Exception as e:
-            return False, f"Failed to validate thread: {e}"
-
-    elif entity_type == "draft":
-        draft = drafts.get_draft(entity_id)
-        if not draft:
-            return False, f"Draft {entity_id} not found"
-        return True, ""
-
-    elif entity_type == "signal_message":
-        msg = signal.get_message(entity_id)
-        if not msg:
-            return False, f"Signal message {entity_id} not found"
-        return True, ""
-
-    else:
+    validators = {
+        "thread": lambda: (lambda acc: acc and gmail.fetch_thread_messages(entity_id, acc.get("email") or email))(accts_module.select_email_account(email)[0]),
+        "draft": lambda: drafts.get_draft(entity_id),
+        "signal_message": lambda: signal.get_message(entity_id),
+    }
+    if entity_type not in validators:
         return False, f"Unknown entity_type: {entity_type}"
+    try:
+        return (bool(validators[entity_type]()), "")
+    except Exception as e:
+        return False, f"Failed to validate {entity_type}: {e}"
 
 
 def _validate_action(entity_type: str, proposed_action: str) -> tuple[bool, str]:
-    if entity_type == "thread":
-        if proposed_action not in VALID_THREAD_ACTIONS:
-            return (
-                False,
-                f"Invalid action '{proposed_action}' for thread. Valid: {VALID_THREAD_ACTIONS}",
-            )
-        return True, ""
-
-    if entity_type == "draft":
-        if proposed_action not in VALID_DRAFT_ACTIONS:
-            return (
-                False,
-                f"Invalid action '{proposed_action}' for draft. Valid: {VALID_DRAFT_ACTIONS}",
-            )
-        return True, ""
-
-    if entity_type == "signal_message":
-        if proposed_action not in VALID_SIGNAL_ACTIONS:
-            return (
-                False,
-                f"Invalid action '{proposed_action}' for signal_message. Valid: {VALID_SIGNAL_ACTIONS}",
-            )
-        return True, ""
-
-    return False, f"Unknown entity_type: {entity_type}"
+    if entity_type not in VALID_ACTIONS:
+        return False, f"Unknown entity_type: {entity_type}"
+    if proposed_action not in VALID_ACTIONS[entity_type]:
+        return False, f"Invalid action '{proposed_action}' for {entity_type}. Valid: {VALID_ACTIONS[entity_type]}"
+    return True, ""
 
 
 def create_proposal(
