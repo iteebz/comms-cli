@@ -38,6 +38,13 @@ comms = "comms.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["comms"]
 
+[tool.pyright]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
