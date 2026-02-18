@@ -1,3 +1,4 @@
+from typing import Any, cast
 import base64
 import hashlib
 import json
@@ -11,7 +12,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-from ...models import Draft, Message
+from comms.models import Draft, Message
 
 SCOPES = [
     "openid",
@@ -19,11 +20,11 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
 ]
 SERVICE_NAME = "comms-cli/gmail"
-TOKEN_KEY_SUFFIX = "/token"
+TOKEN_KEY_SUFFIX = "/token"  # noqa: S105
 CREDENTIALS_PATH = Path.home() / "space/repos/comms-cli/gmail_credentials.json"
 
 
-def _headers_map(headers: list[dict], lower: bool = True) -> dict:
+def _headers_map(headers: list[dict[str, str]], lower: bool = True) -> dict[str, str]:
     if lower:
         return {h["name"].lower(): h["value"] for h in headers}
     return {h["name"]: h["value"] for h in headers}
@@ -38,7 +39,7 @@ def _decode_body(data: str | None) -> str:
         return ""
 
 
-def _extract_body(payload: dict) -> str:
+def _extract_body(payload: dict[str, Any]) -> str:
     parts = payload.get("parts") or []
     for part in parts:
         if part.get("mimeType") == "text/plain":
@@ -51,14 +52,14 @@ def _extract_body(payload: dict) -> str:
     return _decode_body(payload.get("body", {}).get("data"))
 
 
-def _get_token(email_addr: str) -> dict | None:
+def _get_token(email_addr: str) -> dict[str, Any] | None:
     token_json = keyring.get_password(SERVICE_NAME, f"{email_addr}{TOKEN_KEY_SUFFIX}")
     if token_json:
         return json.loads(token_json)
     return None
 
 
-def _set_token(email_addr: str, token_dict: dict):
+def _set_token(email_addr: str, token_dict: dict[str, Any]):
     keyring.set_password(SERVICE_NAME, f"{email_addr}{TOKEN_KEY_SUFFIX}", json.dumps(token_dict))
 
 
@@ -82,7 +83,7 @@ def _get_credentials(email_addr: str | None = None) -> tuple[Credentials, str]:
         raise ValueError(f"Gmail credentials not found at {CREDENTIALS_PATH}")
 
     flow = InstalledAppFlow.from_client_secrets_file(str(CREDENTIALS_PATH), SCOPES)
-    creds = flow.run_local_server(port=0)
+    creds = cast(Credentials, flow.run_local_server(port=0))
 
     service = build("oauth2", "v2", credentials=creds)
     user_info = service.userinfo().get().execute()
@@ -92,7 +93,7 @@ def _get_credentials(email_addr: str | None = None) -> tuple[Credentials, str]:
         raise ValueError("Failed to get email from OAuth token")
 
     _set_token(email, json.loads(creds.to_json()))
-    return creds, email  # type: ignore[return-value]
+    return creds, email
 
 
 def test_connection(account_id: str, email_addr: str) -> tuple[bool, str]:
@@ -105,7 +106,7 @@ def test_connection(account_id: str, email_addr: str) -> tuple[bool, str]:
         return False, f"Connection failed: {e}"
 
 
-def fetch_thread_messages(thread_id: str, email_addr: str) -> list[dict]:
+def fetch_thread_messages(thread_id: str, email_addr: str) -> list[dict[str, Any]]:
     creds, _ = _get_credentials(email_addr)
     service = build("gmail", "v1", credentials=creds)
 
@@ -138,7 +139,7 @@ def count_inbox_threads(email_addr: str) -> int:
     return label.get("threadsTotal", 0)
 
 
-def list_threads(email_addr: str, label: str = "inbox", max_results: int = 50) -> list[dict]:
+def list_threads(email_addr: str, label: str = "inbox", max_results: int = 50) -> list[dict[str, Any]]:
     creds, _ = _get_credentials(email_addr)
     service = build("gmail", "v1", credentials=creds)
 
@@ -189,7 +190,7 @@ def list_threads(email_addr: str, label: str = "inbox", max_results: int = 50) -
     return threads
 
 
-def list_inbox_threads(email_addr: str, max_results: int = 50) -> list[dict]:
+def list_inbox_threads(email_addr: str, max_results: int = 50) -> list[dict[str, Any]]:
     return list_threads(email_addr, label="inbox", max_results=max_results)
 
 

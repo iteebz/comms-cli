@@ -2,7 +2,8 @@
 
 import typer
 
-from .. import audit, services
+from comms import audit, services
+
 from .helpers import run_service
 
 app = typer.Typer()
@@ -48,7 +49,7 @@ def thread(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
 @app.command()
 def summarize(thread_id: str, email: str = typer.Option(None, "--email", "-e")):
     """Summarize thread using Claude"""
-    from .. import claude
+    from comms import claude
 
     full_id = run_service(services.resolve_thread_id, thread_id, email) or thread_id
     messages = run_service(services.fetch_thread, full_id, email)
@@ -67,10 +68,10 @@ def snooze(
     email: str = typer.Option(None, "--email", "-e"),
 ):
     """Snooze thread until later"""
-    from .. import snooze as snooze_module
+    from comms import snooze as snooze_module
 
     full_id = run_service(services.resolve_thread_id, thread_id, email) or thread_id
-    snooze_id, snooze_until = snooze_module.snooze_item(
+    _, snooze_until = snooze_module.snooze_item(
         entity_type="thread",
         entity_id=full_id,
         until=until,
@@ -82,7 +83,7 @@ def snooze(
 @app.command()
 def snoozed():
     """List snoozed threads"""
-    from .. import snooze as snooze_module
+    from comms import snooze as snooze_module
 
     items = snooze_module.get_snoozed_items()
     if not items:

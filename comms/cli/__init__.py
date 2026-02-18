@@ -2,7 +2,8 @@
 
 import typer
 
-from .. import db
+from comms import db
+
 from .accounts import app as accounts_app
 from .daemon import app as daemon_app
 from .drafts import app as drafts_app

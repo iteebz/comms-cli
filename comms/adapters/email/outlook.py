@@ -1,27 +1,24 @@
 """Outlook adapter via Microsoft Graph API."""
 
-import json
+from typing import Any
+
+import re
 from datetime import datetime
 
 import keyring
 import msal
 import requests
 
-from ...models import Draft
+from comms.models import Draft
 
 AUTHORITY = "https://login.microsoftonline.com/common"
 SCOPES = ["https://graph.microsoft.com/Mail.ReadWrite", "https://graph.microsoft.com/Mail.Send"]
 GRAPH_API = "https://graph.microsoft.com/v1.0"
 
 SERVICE_NAME = "comms-cli/outlook"
-TOKEN_KEY_SUFFIX = "/token"
+TOKEN_KEY_SUFFIX = "/token"  # noqa: S105
 CLIENT_ID_SUFFIX = "/client_id"
-CLIENT_SECRET_SUFFIX = "/client_secret"
-
-
-def _get_token_cache(email: str) -> dict | None:
-    data = keyring.get_password(SERVICE_NAME, f"{email}{TOKEN_KEY_SUFFIX}")
-    return json.loads(data) if data else None
+CLIENT_SECRET_SUFFIX = "/client_secret"  # noqa: S105
 
 
 def _set_token_cache(email: str, cache_data: str):
@@ -62,51 +59,50 @@ def _get_access_token(email: str) -> str | None:
         if result and "access_token" in result:
             if cache.has_state_changed:
                 _set_token_cache(email, cache.serialize())
-            return result["access_token"]
+            return str(result["access_token"])
 
     flow = app.initiate_device_flow(scopes=SCOPES)  # type: ignore[attr-defined]
     if "user_code" not in flow:
         return None
 
-    print(flow["message"])
     result = app.acquire_token_by_device_flow(flow)  # type: ignore[attr-defined]
 
     if "access_token" in result:
         _set_token_cache(email, cache.serialize())
-        return result["access_token"]
+        return str(result["access_token"])
 
     return None
 
 
-def _api_get(email: str, endpoint: str, params: dict | None = None) -> dict | None:
+def _api_get(email: str, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
     token = _get_access_token(email)
     if not token:
         return None
 
     headers = {"Authorization": f"Bearer {token}"}
-    resp = requests.get(f"{GRAPH_API}{endpoint}", headers=headers, params=params)
+    resp = requests.get(f"{GRAPH_API}{endpoint}", headers=headers, params=params, timeout=30)
     if resp.status_code == 200:
         return resp.json()
     return None
 
 
-def _api_post(email: str, endpoint: str, data: dict) -> bool:
+def _api_post(email: str, endpoint: str, data: dict[str, Any]) -> bool:
     token = _get_access_token(email)
     if not token:
         return False
 
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    resp = requests.post(f"{GRAPH_API}{endpoint}", headers=headers, json=data)
+    resp = requests.post(f"{GRAPH_API}{endpoint}", headers=headers, json=data, timeout=30)
     return resp.status_code in (200, 201, 202, 204)
 
 
-def _api_patch(email: str, endpoint: str, data: dict) -> bool:
+def _api_patch(email: str, endpoint: str, data: dict[str, Any]) -> bool:
     token = _get_access_token(email)
     if not token:
         return False
 
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    resp = requests.patch(f"{GRAPH_API}{endpoint}", headers=headers, json=data)
+    resp = requests.patch(f"{GRAPH_API}{endpoint}", headers=headers, json=data, timeout=30)
     return resp.status_code in (200, 204)
 
 
@@ -132,7 +128,7 @@ def count_inbox_threads(email: str) -> int:
     return 0
 
 
-def list_threads(email: str, label: str = "inbox", max_results: int = 50) -> list[dict]:
+def list_threads(email: str, label: str = "inbox", max_results: int = 50) -> list[dict[str, Any]]:
     folder_map = {
         "inbox": "inbox",
         "archive": "archive",
@@ -197,7 +193,7 @@ def list_threads(email: str, label: str = "inbox", max_results: int = 50) -> lis
     return threads
 
 
-def _format_recipients(recipients: list[dict]) -> str:
+def _format_recipients(recipients: list[dict[str, Any]]) -> str:
     parts = []
     for r in recipients:
         addr = r.get("emailAddress", {})
@@ -210,7 +206,7 @@ def _format_recipients(recipients: list[dict]) -> str:
     return ", ".join(parts)
 
 
-def fetch_thread_messages(thread_id: str, email: str) -> list[dict]:
+def fetch_thread_messages(thread_id: str, email: str) -> list[dict[str, Any]]:
     params = {
         "$filter": f"conversationId eq '{thread_id}'",
         "$orderby": "receivedDateTime asc",
@@ -230,8 +226,6 @@ def fetch_thread_messages(thread_id: str, email: str) -> list[dict]:
 
         body_content = msg.get("body", {}).get("content", "")
         if msg.get("body", {}).get("contentType") == "html":
-            import re
-
             body_content = re.sub(r"<[^>]+>", "", body_content)
             body_content = body_content.strip()
 

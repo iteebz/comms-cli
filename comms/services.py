@@ -1,9 +1,10 @@
 from __future__ import annotations
+from typing import Any
 
 from dataclasses import dataclass
 
 from . import accounts as accts_module
-from . import drafts, policy, proposals
+from . import drafts, policy, proposals, senders
 from .adapters.email import gmail, outlook
 from .adapters.messaging import signal
 
@@ -18,7 +19,7 @@ class ProposalExecution:
     error: str | None
 
 
-def _resolve_email_account(email: str | None) -> dict:
+def _resolve_email_account(email: str | None) -> dict[str, Any]:
     account, error = accts_module.select_email_account(email)
     if account:
         return account
@@ -62,7 +63,7 @@ def _extract_email(addr: str) -> str:
 
 
 def _build_reply_recipients(
-    messages: list[dict], my_email: str, reply_all: bool
+    messages: list[dict[str, Any]], my_email: str, reply_all: bool
 ) -> tuple[str, str | None]:
     last_msg = messages[-1]
     original_from = last_msg["from"]
@@ -126,8 +127,6 @@ def reply_to_thread(
 
 
 def send_draft(draft_id: str) -> None:
-    from . import senders
-
     d = drafts.get_draft(draft_id)
     if not d:
         raise ValueError(f"Draft {draft_id} not found")
@@ -156,7 +155,7 @@ def send_draft(draft_id: str) -> None:
         senders.record_action(d.to_addr, "reply")
 
 
-def list_threads(label: str) -> list[dict]:
+def list_threads(label: str) -> list[dict[str, Any]]:
     accounts = accts_module.list_accounts("email")
     results = []
     for account in accounts:
@@ -189,8 +188,8 @@ def get_unified_inbox(limit: int = 20) -> list[InboxItem]:
         try:
             adapter = _get_email_adapter(account["provider"])
             threads = adapter.list_threads(account["email"], label="inbox", max_results=limit)
-            for t in threads:
-                items.append(
+            items.extend(
+                [
                     InboxItem(
                         source="email",
                         source_id=account["email"],
@@ -201,7 +200,9 @@ def get_unified_inbox(limit: int = 20) -> list[InboxItem]:
                         unread="UNREAD" in t.get("labels", []),
                         item_id=t["id"],
                     )
-                )
+                    for t in threads
+                ]
+            )
         except ValueError:
             continue
 
@@ -209,8 +210,8 @@ def get_unified_inbox(limit: int = 20) -> list[InboxItem]:
     for account in signal_accounts:
         if account["provider"] == "signal":
             msgs = signal.get_messages(phone=account["email"], limit=limit, unread_only=False)
-            for m in msgs:
-                items.append(
+            items.extend(
+                [
                     InboxItem(
                         source="signal",
                         source_id=account["email"],
@@ -221,13 +222,15 @@ def get_unified_inbox(limit: int = 20) -> list[InboxItem]:
                         unread=m.get("read_at") is None,
                         item_id=m.get("id", ""),
                     )
-                )
+                    for m in msgs
+                ]
+            )
 
     items.sort(key=lambda x: x.timestamp, reverse=True)
     return items[:limit]
 
 
-def fetch_thread(thread_id: str, email: str | None) -> list[dict]:
+def fetch_thread(thread_id: str, email: str | None) -> list[dict[str, Any]]:
     account = _resolve_email_account(email)
     adapter = _get_email_adapter(account["provider"])
     messages = adapter.fetch_thread_messages(thread_id, account["email"])
@@ -251,8 +254,6 @@ def resolve_thread_id(prefix: str, email: str | None) -> str | None:
 
 
 def thread_action(action: str, thread_id: str, email: str | None) -> None:
-    from . import senders
-
     account = _resolve_email_account(email)
     adapter = _get_email_adapter(account["provider"])
     action_fn = _get_thread_action(adapter, action)
@@ -266,7 +267,7 @@ def thread_action(action: str, thread_id: str, email: str | None) -> None:
             if messages:
                 sender = messages[-1].get("from", "")
         except Exception:
-            pass
+            sender = None
 
     success = action_fn(thread_id, account["email"])
     if not success:

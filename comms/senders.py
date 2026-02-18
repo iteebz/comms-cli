@@ -82,25 +82,22 @@ def record_action(sender: str, action: str, response_hours: float | None = None)
         ).fetchone()
 
         if existing:
-            update_parts = [f"{column} = {column} + 1", "last_action_at = ?", "updated_at = ?"]
-            params: list[str | float] = [now, now]
-
             if action == "reply" and response_hours is not None:
                 old_avg: float = existing["avg_response_hours"] or 0.0
                 old_count: int = existing["replied_count"] or 0
                 new_avg = ((old_avg * old_count) + response_hours) / (old_count + 1)
-                update_parts.append("avg_response_hours = ?")
-                params.append(new_avg)
-
-            params.append(sid)
-            conn.execute(
-                f"UPDATE sender_stats SET {', '.join(update_parts)} WHERE id = ?",
-                params,
-            )
+                conn.execute(
+                    f"UPDATE sender_stats SET {column} = {column} + 1, avg_response_hours = ?, last_action_at = ?, updated_at = ? WHERE id = ?",
+                    (new_avg, now, now, sid),
+                )
+            else:
+                conn.execute(
+                    f"UPDATE sender_stats SET {column} = {column} + 1, last_action_at = ?, updated_at = ? WHERE id = ?",
+                    (now, now, sid),
+                )
         else:
             conn.execute(
-                f"""INSERT INTO sender_stats (id, sender, {column}, last_action_at, updated_at)
-                VALUES (?, ?, 1, ?, ?)""",
+                f"INSERT INTO sender_stats (id, sender, {column}, last_action_at, updated_at) VALUES (?, ?, 1, ?, ?)",
                 (sid, sender_norm, now, now),
             )
 

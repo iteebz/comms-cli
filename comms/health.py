@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -18,7 +19,7 @@ def _check_ci() -> CheckResult:
     just_bin = shutil.which("just")
     if not just_bin:
         return CheckResult(ok=False, score=0, detail="just not found")
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(
         [just_bin, "ci"],
         capture_output=True,
         text=True,
@@ -81,10 +82,10 @@ def score() -> dict[str, Any]:
 
 def cli() -> None:
     result = score()
-    print(f"health: {result['score']}/100 {'✓' if result['ok'] else '✗'}")
+    sys.stdout.write(f"health: {result['score']}/100 {'✓' if result['ok'] else '✗'}\n")
     for name, check in result["checks"].items():
         status = "✓" if check["ok"] else "✗"
-        print(f"  {name}: {status} {check['detail']}")
+        sys.stdout.write(f"  {name}: {status} {check['detail']}\n")
     if not result["ok"]:
         raise SystemExit(1)
 

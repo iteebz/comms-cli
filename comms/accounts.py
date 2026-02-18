@@ -1,3 +1,4 @@
+from typing import Any
 import uuid
 
 from .config import add_account as config_add_account
@@ -59,7 +60,7 @@ def list_accounts(service_type: str | None = None):
         return [dict(row) for row in rows]
 
 
-def select_email_account(email: str | None) -> tuple[dict | None, str | None]:
+def select_email_account(email: str | None) -> tuple[dict[str, Any] | None, str | None]:
     accounts = list_accounts("email")
     if not accounts:
         return None, "No email accounts linked. Run: comms link gmail"

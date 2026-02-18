@@ -1,3 +1,4 @@
+from typing import Any
 import subprocess
 import sys
 from pathlib import Path
@@ -86,7 +87,7 @@ def uninstall() -> tuple[bool, str]:
     return True, "Uninstalled"
 
 
-def status() -> dict:
+def status() -> dict[str, Any]:
     installed = PLIST_PATH.exists()
 
     running = False

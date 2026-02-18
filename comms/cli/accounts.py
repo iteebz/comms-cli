@@ -2,9 +2,9 @@
 
 import typer
 
-from .. import accounts as accts_module
-from ..adapters.email import gmail, outlook
-from ..adapters.messaging import signal
+from comms import accounts as accts_module
+from comms.adapters.email import gmail, outlook
+from comms.adapters.messaging import signal
 
 app = typer.Typer()
 
@@ -55,6 +55,7 @@ def link(
         return
 
     email = identifier
+    account_id: str = ""
     if provider == "gmail":
         try:
             email = gmail.init_oauth()

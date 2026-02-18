@@ -1,15 +1,20 @@
+from typing import Any
+import io
 import json
+import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
+
+import qrcode
+
+from comms.db import get_db
 
 SIGNAL_CLI = "signal-cli"
 CONFIG_DIR = Path.home() / ".local/share/signal-cli"
 
 
-def _store_messages(phone: str, messages: list[dict]) -> int:
-    from ...db import get_db
-
+def _store_messages(phone: str, messages: list[dict[str, Any]]) -> int:
     stored = 0
     with get_db() as conn:
         for msg in messages:
@@ -32,7 +37,7 @@ def _store_messages(phone: str, messages: list[dict]) -> int:
                     ),
                 )
                 stored += 1
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
     return stored
 
@@ -42,9 +47,7 @@ def get_messages(
     sender: str | None = None,
     limit: int = 50,
     unread_only: bool = False,
-) -> list[dict]:
-    from ...db import get_db
-
+) -> list[dict[str, Any]]:
     query = "SELECT * FROM signal_messages WHERE 1=1"
     params = []
 
@@ -65,9 +68,7 @@ def get_messages(
         return [dict(row) for row in rows]
 
 
-def get_message(message_id: str) -> dict | None:
-    from ...db import get_db
-
+def get_message(message_id: str) -> dict[str, Any] | None:
     with get_db() as conn:
         row = conn.execute(
             "SELECT * FROM signal_messages WHERE id = ? OR id LIKE ?",
@@ -77,8 +78,6 @@ def get_message(message_id: str) -> dict | None:
 
 
 def mark_read(message_id: str) -> bool:
-    from ...db import get_db
-
     with get_db() as conn:
         conn.execute(
             "UPDATE signal_messages SET read_at = ? WHERE id = ?",
@@ -87,7 +86,7 @@ def mark_read(message_id: str) -> bool:
     return True
 
 
-def reply(phone: str, message_id: str, body: str) -> tuple[bool, str, dict | None]:
+def reply(phone: str, message_id: str, body: str) -> tuple[bool, str, dict[str, Any] | None]:
     msg = get_message(message_id)
     if not msg:
         return False, f"Message {message_id} not found", None
@@ -101,9 +100,7 @@ def reply(phone: str, message_id: str, body: str) -> tuple[bool, str, dict | Non
     return success, result, msg
 
 
-def get_conversations(phone: str) -> list[dict]:
-    from ...db import get_db
-
+def get_conversations(phone: str) -> list[dict[str, Any]]:
     with get_db() as conn:
         rows = conn.execute(
             """
@@ -121,7 +118,7 @@ def get_conversations(phone: str) -> list[dict]:
         return [dict(row) for row in rows]
 
 
-def _run(args: list[str], account: str | None = None) -> dict | list | None:
+def _run(args: list[str], account: str | None = None) -> dict[str, Any] | list[Any] | None:
     cmd = [SIGNAL_CLI]
     if account:
         cmd.extend(["-a", account])
@@ -148,11 +145,11 @@ def list_accounts() -> list[str]:
     )
     if result.returncode != 0:
         return []
-    accounts = []
-    for line in result.stdout.strip().split("\n"):
-        if line.startswith("Number: "):
-            accounts.append(line.replace("Number: ", "").strip())
-    return accounts
+    return [
+        line.replace("Number: ", "").strip()
+        for line in result.stdout.strip().split("\n")
+        if line.startswith("Number: ")
+    ]
 
 
 def is_registered(phone: str) -> bool:
@@ -183,10 +180,6 @@ def verify(phone: str, code: str) -> tuple[bool, str]:
 
 
 def link(device_name: str = "comms-cli") -> tuple[bool, str]:
-    import io
-
-    import qrcode
-
     process = subprocess.Popen(
         [SIGNAL_CLI, "link", "-n", device_name],
         stdout=subprocess.PIPE,
@@ -198,7 +191,7 @@ def link(device_name: str = "comms-cli") -> tuple[bool, str]:
     if process.stdout:
         for line in iter(process.stdout.readline, ""):
             line = line.strip()
-            if line.startswith("sgnl://") or line.startswith("tsdevice:"):
+            if line.startswith(("sgnl://", "tsdevice:")):
                 uri = line
                 break
 
@@ -213,7 +206,7 @@ def link(device_name: str = "comms-cli") -> tuple[bool, str]:
 
     f = io.StringIO()
     qr.print_ascii(out=f, invert=True)
-    print(f.getvalue())
+    print(f.getvalue())  # noqa: T201
 
     try:
         process.wait(timeout=120)
@@ -225,9 +218,7 @@ def link(device_name: str = "comms-cli") -> tuple[bool, str]:
         return False, "Timeout waiting for scan"
 
 
-def receive(phone: str, timeout: int = 1, store: bool = True) -> list[dict]:
-    import re
-
+def receive(phone: str, timeout: int = 1, store: bool = True) -> list[dict[str, Any]]:
     result = subprocess.run(
         [SIGNAL_CLI, "-a", phone, "receive", "-t", str(timeout)],
         capture_output=True,
@@ -296,14 +287,14 @@ def send_group(phone: str, group_id: str, message: str) -> tuple[bool, str]:
     return False, result.stderr or "Send failed"
 
 
-def list_groups(phone: str) -> list[dict]:
+def list_groups(phone: str) -> list[dict[str, Any]]:
     result = _run(["listGroups"], account=phone)
     if not result or not isinstance(result, list):
         return []
     return [{"id": g.get("id", ""), "name": g.get("name", "")} for g in result]
 
 
-def list_contacts(phone: str) -> list[dict]:
+def list_contacts(phone: str) -> list[dict[str, Any]]:
     result = _run(["listContacts"], account=phone)
     if not result or not isinstance(result, list):
         return []

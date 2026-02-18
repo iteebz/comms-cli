@@ -1,7 +1,8 @@
+from typing import Any
 import uuid
 
 from . import accounts as accts_module
-from . import audit
+from . import audit, drafts, learning
 from .adapters.email import gmail
 from .adapters.messaging import signal
 from .db import get_db, now_iso
@@ -29,8 +30,6 @@ def _validate_entity(entity_type: str, entity_id: str, email: str | None) -> tup
             return False, f"Failed to validate thread: {e}"
 
     elif entity_type == "draft":
-        from . import drafts
-
         draft = drafts.get_draft(entity_id)
         if not draft:
             return False, f"Draft {entity_id} not found"
@@ -82,8 +81,6 @@ def create_proposal(
     email: str | None = None,
     skip_validation: bool = False,
 ) -> tuple[str | None, str, bool]:
-    from . import learning
-
     if not skip_validation:
         valid_action, msg = _validate_action(entity_type, proposed_action)
         if not valid_action:
@@ -131,7 +128,7 @@ def create_proposal(
     return proposal_id, "", auto_approved
 
 
-def get_proposal(proposal_id: str) -> dict | None:
+def get_proposal(proposal_id: str) -> dict[str, Any] | None:
     with get_db() as conn:
         row = conn.execute("SELECT * FROM proposals WHERE id = ?", (proposal_id,)).fetchone()
         if not row:
@@ -139,7 +136,7 @@ def get_proposal(proposal_id: str) -> dict | None:
         return dict(row)
 
 
-def list_proposals(status: str | None = None) -> list[dict]:
+def list_proposals(status: str | None = None) -> list[dict[str, Any]]:
     with get_db() as conn:
         if status:
             rows = conn.execute(
@@ -259,7 +256,7 @@ def mark_executed(proposal_id: str) -> bool:
     return True
 
 
-def get_approved_proposals() -> list[dict]:
+def get_approved_proposals() -> list[dict[str, Any]]:
     with get_db() as conn:
         rows = conn.execute(
             "SELECT * FROM proposals WHERE status = 'approved' ORDER BY approved_at ASC"

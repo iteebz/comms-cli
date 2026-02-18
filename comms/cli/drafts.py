@@ -2,8 +2,9 @@
 
 import typer
 
-from .. import drafts as drafts_module
-from .. import policy, services
+from comms import drafts as drafts_module
+from comms import policy, services
+
 from .helpers import run_service
 
 app = typer.Typer()
@@ -132,7 +133,7 @@ def draft_reply(
     reply_all: bool = typer.Option(False, "--all", "-a", help="Reply to all recipients"),
 ):
     """Generate reply draft using Claude"""
-    from .. import claude
+    from comms import claude
 
     full_id = run_service(services.resolve_thread_id, thread_id, email) or thread_id
     messages = run_service(services.fetch_thread, full_id, email)

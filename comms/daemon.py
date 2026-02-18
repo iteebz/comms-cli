@@ -1,10 +1,14 @@
+from typing import Any
 import os
 import signal
 import sys
 import time
+from pathlib import Path
 
+from . import accounts as accts_module
+from . import agent
 from .adapters.messaging import signal as signal_adapter
-from .config import COMMS_DIR
+from .config import COMMS_DIR, get_agent_config
 
 PID_FILE = COMMS_DIR / "daemon.pid"
 LOG_FILE = COMMS_DIR / "daemon.log"
@@ -12,21 +16,16 @@ LOG_FILE = COMMS_DIR / "daemon.log"
 
 def _log(msg: str) -> None:
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-    with open(LOG_FILE, "a") as f:
+    with LOG_FILE.open("a") as f:
         f.write(f"{timestamp} {msg}\n")
 
 
 def _get_signal_phones() -> list[str]:
-    from . import accounts as accts_module
-
     accounts = accts_module.list_accounts("messaging")
     return [a["email"] for a in accounts if a["provider"] == "signal"]
 
 
 def _poll_once(phones: list[str], timeout: int = 1) -> int:
-    from . import agent
-    from .config import get_agent_config
-
     agent_config = get_agent_config()
     agent_enabled = bool(agent_config.get("enabled", True))
     use_nlp = bool(agent_config.get("nlp", False))
@@ -56,10 +55,10 @@ def _poll_once(phones: list[str], timeout: int = 1) -> int:
 def run(interval: int = 5) -> None:
     phones = _get_signal_phones()
     if not phones:
-        print("No Signal accounts linked")
+        sys.stdout.write("No Signal accounts linked\n")
         sys.exit(1)
 
-    with open(PID_FILE, "w") as f:
+    with PID_FILE.open("w") as f:
         f.write(str(os.getpid()))
 
     running = True
@@ -73,7 +72,7 @@ def run(interval: int = 5) -> None:
     signal.signal(signal.SIGINT, handle_signal)
 
     _log(f"Daemon started, polling {len(phones)} account(s) every {interval}s")
-    print(f"Daemon started (PID {os.getpid()})")
+    sys.stdout.write(f"Daemon started (PID {os.getpid()})\n")
 
     while running:
         _poll_once(phones, timeout=1)
@@ -105,9 +104,10 @@ def start(interval: int = 5, foreground: bool = False) -> tuple[bool, str]:
     os.setsid()
     os.umask(0)
 
-    sys.stdin = open(os.devnull)  # noqa: SIM115
-    sys.stdout = open(os.devnull, "w")  # noqa: SIM115
-    sys.stderr = open(os.devnull, "w")  # noqa: SIM115
+    devnull = Path(os.devnull)
+    sys.stdin = devnull.open()
+    sys.stdout = devnull.open("w")
+    sys.stderr = devnull.open("w")
 
     run(interval)
     sys.exit(0)
@@ -153,7 +153,7 @@ def is_running() -> bool:
         return False
 
 
-def status() -> dict:
+def status() -> dict[str, Any]:
     pid = get_pid()
     running = is_running()
     phones = _get_signal_phones()

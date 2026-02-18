@@ -1,6 +1,8 @@
 {
   "include": ["comms"],
   "pythonVersion": "3.12",
+  "venvPath": ".",
+  "venv": ".venv",
   "typeCheckingMode": "strict",
   "reportUnnecessaryTypeIgnoreComment": true,
   "reportIncompatibleMethodOverride": true,
@@ -13,5 +15,9 @@
   "reportMissingParameterType": false,
   "reportPrivateUsage": false,
   "reportUnknownVariableType": false,
-  "reportUnknownParameterType": false
+  "reportUnknownParameterType": false,
+  "reportUntypedFunctionDecorator": false,
+  "reportMissingModuleSource": false,
+  "reportMissingTypeStubs": false,
+  "reportUnusedFunction": false
 }

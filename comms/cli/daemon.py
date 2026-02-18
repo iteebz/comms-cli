@@ -42,11 +42,11 @@ def agent_list():
 
 @app.command()
 def agent_config(
-    enable: bool = typer.Option(None, "--enable/--disable", help="Enable or disable agent"),
-    nlp: bool = typer.Option(None, "--nlp/--no-nlp", help="Enable natural language parsing"),
+    enable: bool | None = typer.Option(None, "--enable/--disable", help="Enable or disable agent"),
+    nlp: bool | None = typer.Option(None, "--nlp/--no-nlp", help="Enable natural language parsing"),
 ):
     """Configure agent settings"""
-    from ..config import get_agent_config, set_agent_config
+    from comms.config import get_agent_config, set_agent_config
 
     config = get_agent_config()
 
@@ -67,7 +67,7 @@ def daemon_start(
     foreground: bool = typer.Option(False, "--foreground", "-f", help="Run in foreground"),
 ):
     """Start Signal daemon (background polling)"""
-    from .. import daemon
+    from comms import daemon
 
     success, msg = daemon.start(interval=interval, foreground=foreground)
     typer.echo(msg)
@@ -78,7 +78,7 @@ def daemon_start(
 @app.command()
 def daemon_stop():
     """Stop Signal daemon"""
-    from .. import daemon
+    from comms import daemon
 
     success, msg = daemon.stop()
     typer.echo(msg)
@@ -89,7 +89,7 @@ def daemon_stop():
 @app.command()
 def daemon_status():
     """Show daemon status"""
-    from .. import daemon, launchd
+    from comms import daemon, launchd
 
     s = daemon.status()
     ld = launchd.status()
@@ -113,7 +113,7 @@ def daemon_install(
     interval: int = typer.Option(5, "--interval", "-i", help="Polling interval"),
 ):
     """Install daemon as launchd service (auto-start on boot)"""
-    from .. import launchd
+    from comms import launchd
 
     success, msg = launchd.install(interval=interval)
     typer.echo(msg)
@@ -124,7 +124,7 @@ def daemon_install(
 @app.command()
 def daemon_uninstall():
     """Uninstall daemon launchd service"""
-    from .. import launchd
+    from comms import launchd
 
     success, msg = launchd.uninstall()
     typer.echo(msg)

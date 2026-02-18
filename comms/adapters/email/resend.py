@@ -1,5 +1,6 @@
 import os
 
+import httpx
 import keyring
 
 SERVICE_NAME = "comms-cli/resend"
@@ -23,8 +24,6 @@ def test_connection() -> tuple[bool, str]:
         return False, "No API key configured"
 
     try:
-        import httpx
-
         resp = httpx.get(
             "https://api.resend.com/domains",
             headers={"Authorization": f"Bearer {api_key}"},
@@ -46,14 +45,12 @@ def send_message(from_addr: str, to_addr: str, subject: str, body: str) -> tuple
         return False, "No API key configured"
 
     try:
-        import httpx
-
         resp = httpx.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {api_key}"},
             json={
                 "from": from_addr,
-                "to": [to_addr] if isinstance(to_addr, str) else to_addr,
+                "to": [to_addr],
                 "subject": subject,
                 "text": body,
             },

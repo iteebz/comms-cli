@@ -1,6 +1,7 @@
 """Agent bus — parse Signal messages as commands, execute, respond."""
 
 from __future__ import annotations
+from typing import Any
 
 import subprocess
 from dataclasses import dataclass
@@ -49,7 +50,7 @@ def remove_authorized_sender(phone: str) -> bool:
 
 def is_command(text: str) -> bool:
     text = text.strip().lower()
-    return text.startswith("!") or text.startswith("comms ")
+    return text.startswith(("!", "comms "))
 
 
 def parse_command(text: str) -> Command | None:
@@ -91,7 +92,7 @@ COMMAND_MAP = {
 
 
 def parse_natural_language(text: str) -> Command | None:
-    import json
+    import json  # noqa: PLC0415
 
     prompt = f"""Parse this message into a comms command. Return JSON only.
 
@@ -186,6 +187,8 @@ def execute_command(cmd: Command) -> CommandResult:
 
     if action in COMMAND_MAP:
         comms_cmd = COMMAND_MAP[action]
+        if comms_cmd is None:
+            return CommandResult(success=False, message=f"No command mapped for: {action}", executed=action)
         success, output = _run_comms_command(comms_cmd)
         return CommandResult(success=success, message=output, executed=comms_cmd)
 
@@ -265,7 +268,7 @@ def process_message(
     return execute_command(cmd)
 
 
-def handle_incoming(phone: str, message: dict, use_nlp: bool = False) -> str | None:
+def handle_incoming(phone: str, message: dict[str, Any], use_nlp: bool = False) -> str | None:
     sender = message.get("sender_phone", "")
     body = message.get("body", "")
 

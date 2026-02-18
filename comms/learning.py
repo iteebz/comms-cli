@@ -1,6 +1,8 @@
+from typing import Any
 import json
 from dataclasses import dataclass
 
+from . import config
 from .db import get_db
 
 
@@ -25,7 +27,7 @@ def get_decision_stats() -> dict[str, ActionStats]:
             """
         ).fetchall()
 
-    stats: dict[str, dict] = {}
+    stats: dict[str, dict[str, Any]] = {}
     for row in rows:
         action = row["proposed_action"]
         decision = row["user_decision"]
@@ -67,7 +69,7 @@ def get_decision_stats() -> dict[str, ActionStats]:
     return result
 
 
-def get_correction_patterns() -> list[dict]:
+def get_correction_patterns() -> list[dict[str, Any]]:
     with get_db() as conn:
         rows = conn.execute(
             """
@@ -100,10 +102,8 @@ def suggest_auto_approve(threshold: float = 0.95, min_samples: int = 10) -> list
 
 
 def should_auto_approve(action: str) -> bool:
-    from .config import get_policy
-
-    policy = get_policy()
-    auto: dict = policy.get("auto_approve", {})
+    policy = config.get_policy()
+    auto: dict[str, Any] = policy.get("auto_approve", {})
 
     if not auto.get("enabled", False):
         return False

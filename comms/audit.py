@@ -1,3 +1,4 @@
+from typing import Any
 import json
 
 from .db import get_db, now_iso
@@ -7,7 +8,7 @@ def log(
     action: str,
     entity_type: str,
     entity_id: str,
-    metadata: dict | None = None,
+    metadata: dict[str, Any] | None = None,
     proposed_action: str | None = None,
     user_decision: str | None = None,
     reasoning: str | None = None,
@@ -33,7 +34,7 @@ def log(
         )
 
 
-def get_recent_logs(limit: int = 50) -> list[dict]:
+def get_recent_logs(limit: int = 50) -> list[dict[str, Any]]:
     with get_db() as conn:
         rows = conn.execute(
             """
@@ -54,7 +55,7 @@ def log_decision(
     entity_id: str,
     user_decision: str,
     reasoning: str | None = None,
-    metadata: dict | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> None:
     log(
         action="decision",

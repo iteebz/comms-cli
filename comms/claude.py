@@ -1,3 +1,4 @@
+from typing import Any
 """Headless Claude invocation for draft generation and summarization."""
 
 import subprocess
@@ -84,7 +85,7 @@ Thanks for the update. I'll review the proposal by Friday and get back to you wi
 
 
 def generate_signal_reply(
-    conversation: list[dict],
+    conversation: list[dict[str, Any]],
     instructions: str | None = None,
     model: str = "claude-sonnet-4-20250514",
 ) -> tuple[str, str]:
@@ -158,7 +159,7 @@ Yeah 3pm works for me, see you then!"""
 
 
 def summarize_thread(
-    messages: list[dict],
+    messages: list[dict[str, Any]],
     model: str = "claude-haiku-4-5",
 ) -> str:
     """Summarize an email thread. Returns summary string."""

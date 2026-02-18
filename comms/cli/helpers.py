@@ -2,7 +2,7 @@
 
 import typer
 
-from .. import accounts as accts_module
+from comms import accounts as accts_module
 
 
 def run_service(fn, *args, **kwargs):

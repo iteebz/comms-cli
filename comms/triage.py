@@ -6,6 +6,7 @@ import json
 import subprocess
 from dataclasses import dataclass
 
+from . import proposals as proposals_module
 from .config import RULES_PATH
 from .contacts import format_contacts_for_prompt
 from .patterns import detect_urgency, should_skip_triage
@@ -205,8 +206,6 @@ def create_proposals_from_triage(
     min_confidence: float = 0.7,
     dry_run: bool = False,
 ) -> list[tuple[str, TriageProposal]]:
-    from . import proposals as proposals_module
-
     created = []
     for p in proposals:
         if p.confidence < min_confidence:
@@ -220,7 +219,7 @@ def create_proposals_from_triage(
             created.append(("dry-run", p))
             continue
 
-        proposal_id, error, auto = proposals_module.create_proposal(
+        proposal_id, _, _ = proposals_module.create_proposal(
             entity_type=entity_type,
             entity_id=p.item.item_id,
             proposed_action=p.action,

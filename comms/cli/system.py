@@ -1,12 +1,13 @@
+from typing import Any
 """System commands: init, backup, status, inbox, triage."""
 
 from datetime import datetime
 
 import typer
 
-from .. import accounts as accts_module
-from .. import db, services
-from ..adapters.email import gmail, outlook
+from comms import accounts as accts_module
+from comms import db, services
+from comms.adapters.email import gmail, outlook
 
 app = typer.Typer()
 
@@ -72,7 +73,7 @@ def backup():
 @app.command()
 def rules():
     """Show triage rules (edit at ~/.comms/rules.md)"""
-    from ..config import RULES_PATH
+    from comms.config import RULES_PATH
 
     if not RULES_PATH.exists():
         typer.echo(f"No rules file. Create one at: {RULES_PATH}")
@@ -84,7 +85,7 @@ def rules():
 @app.command()
 def contacts():
     """Show contact notes (edit at ~/.comms/contacts.md)"""
-    from ..contacts import CONTACTS_PATH, get_all_contacts
+    from comms.contacts import CONTACTS_PATH, get_all_contacts
 
     if not CONTACTS_PATH.exists():
         typer.echo(f"No contacts file. Create one at: {CONTACTS_PATH}")
@@ -112,7 +113,7 @@ def contacts():
 @app.command()
 def templates(init: bool = typer.Option(False, "--init", help="Create default templates file")):
     """Show reply templates (edit at ~/.comms/templates.md)"""
-    from ..templates import TEMPLATES_PATH, get_templates, init_templates
+    from comms.templates import TEMPLATES_PATH, get_templates, init_templates
 
     if init:
         init_templates()
@@ -133,18 +134,18 @@ def templates(init: bool = typer.Option(False, "--init", help="Create default te
 @app.command()
 def status():
     """Show system status"""
-    from ..config import get_policy
+    from comms.config import get_policy
 
     pol = get_policy()
     typer.echo("Policy:")
     typer.echo(f"  Require approval: {pol.get('require_approval', True)}")
     typer.echo(f"  Max daily sends: {pol.get('max_daily_sends', 50)}")
-    allowed_recipients: list = pol.get("allowed_recipients") or []
-    allowed_domains: list = pol.get("allowed_domains") or []
+    allowed_recipients: list[Any] = pol.get("allowed_recipients") or []
+    allowed_domains: list[Any] = pol.get("allowed_domains") or []
     typer.echo(f"  Allowed recipients: {len(allowed_recipients)}")
     typer.echo(f"  Allowed domains: {len(allowed_domains)}")
 
-    auto: dict = pol.get("auto_approve") or {}
+    auto: dict[str, Any] = pol.get("auto_approve") or {}
     typer.echo("\nAuto-approve:")
     typer.echo(f"  Enabled: {auto.get('enabled', False)}")
     typer.echo(f"  Threshold: {auto.get('threshold', 0.95):.0%}")
@@ -154,16 +155,16 @@ def status():
 
 @app.command()
 def auto_approve(
-    enable: bool = typer.Option(None, "--enable/--disable", help="Enable or disable"),
-    threshold: float = typer.Option(None, "--threshold", "-t", help="Accuracy threshold"),
-    min_samples: int = typer.Option(None, "--min-samples", "-n", help="Minimum samples"),
+    enable: bool | None = typer.Option(None, "--enable/--disable", help="Enable or disable"),
+    threshold: float | None = typer.Option(None, "--threshold", "-t", help="Accuracy threshold"),
+    min_samples: int | None = typer.Option(None, "--min-samples", "-n", help="Minimum samples"),
     action: list[str] | None = None,
 ):
     """Configure auto-approve settings"""
-    from ..config import get_policy, set_policy
+    from comms.config import get_policy, set_policy
 
     pol = get_policy()
-    auto: dict = pol.get("auto_approve") or {}
+    auto: dict[str, Any] = pol.get("auto_approve") or {}
 
     if enable is not None:
         auto["enabled"] = enable
@@ -186,7 +187,7 @@ def auto_approve(
 @app.command()
 def stats():
     """Show learning stats from decisions"""
-    from .. import learning
+    from comms import learning
 
     action_stats = learning.get_decision_stats()
     if not action_stats:
@@ -214,7 +215,7 @@ def stats():
 @app.command()
 def senders(limit: int = typer.Option(20, "--limit", "-n")):
     """Show sender statistics and priority scores"""
-    from .. import senders
+    from comms import senders
 
     top = senders.get_top_senders(limit=limit)
     if not top:
@@ -241,7 +242,7 @@ def senders(limit: int = typer.Option(20, "--limit", "-n")):
 @app.command()
 def audit_log(limit: int = 20):
     """Show recent audit log"""
-    from .. import audit
+    from comms import audit
 
     logs = audit.get_recent_logs(limit)
     for log_entry in logs:
@@ -254,7 +255,7 @@ def audit_log(limit: int = 20):
 @app.command()
 def digest(days: int = typer.Option(7, "--days", "-d", help="Number of days to summarize")):
     """Weekly activity digest"""
-    from .. import digest as digest_module
+    from comms import digest as digest_module
 
     stats = digest_module.get_digest(days=days)
     typer.echo(digest_module.format_digest(stats))
@@ -268,7 +269,7 @@ def triage(
     auto_execute: bool = typer.Option(False, "--execute", "-x", help="Auto-execute after approval"),
 ):
     """Triage inbox — Claude bulk-proposes actions"""
-    from .. import triage as triage_module
+    from comms import triage as triage_module
 
     typer.echo("Scanning inbox...")
     triage_proposals = triage_module.triage_inbox(limit=limit)
@@ -311,8 +312,8 @@ def clear(
     dry_run: bool = typer.Option(False, "--dry-run", "-d", help="Show what would happen"),
 ):
     """One-command inbox clear: triage → approve → execute"""
-    from .. import proposals as proposals_module
-    from .. import triage as triage_module
+    from comms import proposals as proposals_module
+    from comms import triage as triage_module
 
     typer.echo("Scanning inbox...")
     triage_proposals = triage_module.triage_inbox(limit=limit)

@@ -1,6 +1,7 @@
 """Snooze management — defer items to resurface later."""
 
 from __future__ import annotations
+from typing import Any
 
 import uuid
 from datetime import datetime, timedelta
@@ -23,11 +24,11 @@ def parse_until(until: str) -> datetime:
         days_ahead = (7 - now.weekday()) % 7 or 7
         return (now + timedelta(days=days_ahead)).replace(hour=9, minute=0, second=0, microsecond=0)
 
-    if until_lower.endswith("h") or until_lower.endswith("hr") or until_lower.endswith("hour"):
+    if until_lower.endswith(("h", "hr", "hour")):
         hours = int("".join(c for c in until_lower if c.isdigit()) or "1")
         return now + timedelta(hours=hours)
 
-    if until_lower.endswith("d") or until_lower.endswith("day"):
+    if until_lower.endswith(("d", "day")):
         days = int("".join(c for c in until_lower if c.isdigit()) or "1")
         return (now + timedelta(days=days)).replace(hour=9, minute=0, second=0, microsecond=0)
 
@@ -74,7 +75,7 @@ def snooze_item(
     return snooze_id, snooze_until
 
 
-def get_due_snoozes() -> list[dict]:
+def get_due_snoozes() -> list[dict[str, Any]]:
     now = datetime.now().isoformat()
 
     with db.get_db() as conn:
@@ -99,7 +100,7 @@ def mark_resurfaced(snooze_id: str) -> bool:
         return result.rowcount > 0
 
 
-def get_snoozed_items() -> list[dict]:
+def get_snoozed_items() -> list[dict[str, Any]]:
     now = datetime.now().isoformat()
 
     with db.get_db() as conn:

@@ -4,7 +4,8 @@ from datetime import datetime
 
 import typer
 
-from ..adapters.messaging import signal as signal_module
+from comms.adapters.messaging import signal as signal_module
+
 from .helpers import get_signal_phone
 
 app = typer.Typer()
