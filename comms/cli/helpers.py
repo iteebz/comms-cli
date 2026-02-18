@@ -17,7 +17,7 @@ def get_signal_phone(phone: str | None) -> str:
     if phone:
         return phone
     accounts = accts_module.list_accounts("messaging")
-    signal_accounts = [a for a in accounts if a["provider"] == "signal"]
+    signal_accounts = [account for account in accounts if account["provider"] == "signal"]
     if not signal_accounts:
         typer.echo("No Signal accounts linked. Run: comms link signal")
         raise typer.Exit(1)

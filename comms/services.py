@@ -1,7 +1,7 @@
 from __future__ import annotations
-from typing import Any
 
 from dataclasses import dataclass
+from typing import Any
 
 from . import accounts as accts_module
 from . import drafts, policy, proposals, senders
@@ -65,8 +65,8 @@ def _extract_email(addr: str) -> str:
 def _build_reply_recipients(
     messages: list[dict[str, Any]], my_email: str, reply_all: bool
 ) -> tuple[str, str | None]:
-    last_msg = messages[-1]
-    original_from = last_msg["from"]
+    last_message = messages[-1]
+    original_from = last_message["from"]
     to_addr = original_from
 
     if not reply_all:
@@ -75,15 +75,15 @@ def _build_reply_recipients(
     all_recipients: set[str] = set()
     my_email_lower = my_email.lower()
 
-    for msg in messages:
+    for message in messages:
         for field in ["from", "to", "cc"]:
-            raw = msg.get(field, "")
+            raw = message.get(field, "")
             if not raw:
                 continue
             for part in raw.split(","):
-                email = _extract_email(part)
-                if email and email.lower() != my_email_lower:
-                    all_recipients.add(email)
+                email_addr = _extract_email(part)
+                if email_addr and email_addr.lower() != my_email_lower:
+                    all_recipients.add(email_addr)
 
     to_email = _extract_email(original_from)
     all_recipients.discard(to_email)

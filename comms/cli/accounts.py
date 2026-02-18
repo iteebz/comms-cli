@@ -30,7 +30,8 @@ def link(
         if existing:
             typer.echo(f"Signal accounts already linked: {existing}")
             for phone in existing:
-                if not any(a["email"] == phone for a in accts_module.list_accounts("messaging")):
+                registered = accts_module.list_accounts("messaging")
+                if not any(account["email"] == phone for account in registered):
                     account_id = accts_module.add_messaging_account("signal", phone)
                     typer.echo(f"Added existing account: {phone} ({account_id[:8]})")
             return
@@ -38,9 +39,9 @@ def link(
         typer.echo("Linking Signal as secondary device...")
         typer.echo("Open Signal on your phone -> Settings -> Linked Devices -> Link New Device")
         typer.echo("Then scan the QR code that will appear.")
-        success, msg = signal.link("comms-cli")
+        success, error_msg = signal.link("comms-cli")
         if not success:
-            typer.echo(f"Link failed: {msg}")
+            typer.echo(f"Link failed: {error_msg}")
             raise typer.Exit(1)
 
         accounts = signal.list_accounts()
@@ -65,9 +66,9 @@ def link(
             raise typer.Exit(1) from None
 
         account_id = accts_module.add_email_account(provider, email)
-        success, msg = gmail.test_connection(account_id, email)
+        success, error_msg = gmail.test_connection(account_id, email)
         if not success:
-            typer.echo(f"Failed to connect: {msg}")
+            typer.echo(f"Failed to connect: {error_msg}")
             raise typer.Exit(1)
 
     elif provider == "outlook":
@@ -84,9 +85,9 @@ def link(
 
         account_id = accts_module.add_email_account(provider, email)
         outlook.store_credentials(email, client_id, client_secret)
-        success, msg = outlook.test_connection(account_id, email, client_id, client_secret)
+        success, error_msg = outlook.test_connection(account_id, email, client_id, client_secret)
         if not success:
-            typer.echo(f"Failed to connect: {msg}")
+            typer.echo(f"Failed to connect: {error_msg}")
             raise typer.Exit(1)
 
     typer.echo(f"Linked {provider}: {email}")
@@ -101,16 +102,19 @@ def accounts():
         typer.echo("No accounts configured")
         return
 
-    for acct in accts:
-        status = "✓" if acct["enabled"] else "✗"
-        typer.echo(f"{status} {acct['provider']:10} {acct['email']:30} {acct['id'][:8]}")
+    for account in accts:
+        status = "✓" if account["enabled"] else "✗"
+        typer.echo(f"{status} {account['provider']:10} {account['email']:30} {account['id'][:8]}")
 
 
 @app.command()
 def unlink(account_id: str):
     """Unlink account by ID or email"""
-    accts = accts_module.list_accounts()
-    matching = [a for a in accts if a["id"].startswith(account_id) or a["email"] == account_id]
+    accounts = accts_module.list_accounts()
+    matching = [
+        account for account in accounts
+        if account["id"].startswith(account_id) or account["email"] == account_id
+    ]
 
     if not matching:
         typer.echo(f"No account found matching: {account_id}")
@@ -118,13 +122,13 @@ def unlink(account_id: str):
 
     if len(matching) > 1:
         typer.echo(f"Multiple accounts match '{account_id}':")
-        for acct in matching:
-            typer.echo(f"  {acct['id'][:8]} {acct['provider']} {acct['email']}")
+        for account in matching:
+            typer.echo(f"  {account['id'][:8]} {account['provider']} {account['email']}")
         raise typer.Exit(1)
 
-    acct = matching[0]
-    if accts_module.remove_account(acct["id"]):
-        typer.echo(f"Unlinked {acct['provider']}: {acct['email']}")
+    account = matching[0]
+    if accts_module.remove_account(account["id"]):
+        typer.echo(f"Unlinked {account['provider']}: {account['email']}")
     else:
         typer.echo("Failed to unlink account")
         raise typer.Exit(1)

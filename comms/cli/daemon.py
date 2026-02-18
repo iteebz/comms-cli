@@ -30,14 +30,14 @@ def agent_list():
     """List authorized command senders"""
     from .. import agent
 
-    senders = agent.get_authorized_senders()
-    if not senders:
+    authorized_senders = agent.get_authorized_senders()
+    if not authorized_senders:
         typer.echo("No authorized senders (all senders allowed)")
         return
 
     typer.echo("Authorized senders:")
-    for s in sorted(senders):
-        typer.echo(f"  {s}")
+    for sender in sorted(authorized_senders):
+        typer.echo(f"  {sender}")
 
 
 @app.command()
@@ -69,8 +69,8 @@ def daemon_start(
     """Start Signal daemon (background polling)"""
     from comms import daemon
 
-    success, msg = daemon.start(interval=interval, foreground=foreground)
-    typer.echo(msg)
+    success, status_msg = daemon.start(interval=interval, foreground=foreground)
+    typer.echo(status_msg)
     if not success:
         raise typer.Exit(1)
 
@@ -80,8 +80,8 @@ def daemon_stop():
     """Stop Signal daemon"""
     from comms import daemon
 
-    success, msg = daemon.stop()
-    typer.echo(msg)
+    success, status_msg = daemon.stop()
+    typer.echo(status_msg)
     if not success:
         raise typer.Exit(1)
 
@@ -91,20 +91,22 @@ def daemon_status():
     """Show daemon status"""
     from comms import daemon, launchd
 
-    s = daemon.status()
-    ld = launchd.status()
+    daemon_info = daemon.status()
+    launchd_info = launchd.status()
 
-    if ld["installed"]:
-        typer.echo(f"Launchd: {'running' if ld['running'] else 'installed but not running'}")
-    elif s["running"]:
-        typer.echo(f"Running (PID {s['pid']})")
-        typer.echo(f"Accounts: {', '.join(s['accounts'])}")
+    if launchd_info["installed"]:
+        typer.echo(
+            f"Launchd: {'running' if launchd_info['running'] else 'installed but not running'}"
+        )
+    elif daemon_info["running"]:
+        typer.echo(f"Running (PID {daemon_info['pid']})")
+        typer.echo(f"Accounts: {', '.join(daemon_info['accounts'])}")
     else:
         typer.echo("Not running")
 
-    if s.get("last_log"):
+    if daemon_info.get("last_log"):
         typer.echo("\nRecent log:")
-        for line in s["last_log"]:
+        for line in daemon_info["last_log"]:
             typer.echo(f"  {line}")
 
 
@@ -115,8 +117,8 @@ def daemon_install(
     """Install daemon as launchd service (auto-start on boot)"""
     from comms import launchd
 
-    success, msg = launchd.install(interval=interval)
-    typer.echo(msg)
+    success, status_msg = launchd.install(interval=interval)
+    typer.echo(status_msg)
     if not success:
         raise typer.Exit(1)
 
@@ -126,7 +128,7 @@ def daemon_uninstall():
     """Uninstall daemon launchd service"""
     from comms import launchd
 
-    success, msg = launchd.uninstall()
-    typer.echo(msg)
+    success, status_msg = launchd.uninstall()
+    typer.echo(status_msg)
     if not success:
         raise typer.Exit(1)
