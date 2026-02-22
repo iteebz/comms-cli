@@ -80,6 +80,7 @@ def signal_send(
     message: str = typer.Option(..., "--message", "-m", help="Message to send"),
     phone: str = typer.Option(None, "--phone", "-p"),
     group: bool = typer.Option(False, "--group", "-g", help="Send to group"),
+    attachment: str = typer.Option(None, "--attachment", "-a", help="Path to attachment"),
 ) -> None:
     """Send Signal message"""
     phone = get_signal_phone(phone)
@@ -87,7 +88,7 @@ def signal_send(
     if group:
         success, error_msg = signal_module.send_group(phone, recipient, message)
     else:
-        success, error_msg = signal_module.send(phone, recipient, message)
+        success, error_msg = signal_module.send(phone, recipient, message, attachment=attachment)
 
     if success:
         typer.echo(f"Sent to {recipient}")

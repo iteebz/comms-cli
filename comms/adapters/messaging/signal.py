@@ -263,13 +263,12 @@ def receive(phone: str, timeout: int = 1, store: bool = True) -> list[dict[str, 
     return messages
 
 
-def send(phone: str, recipient: str, message: str) -> tuple[bool, str]:
-    result = subprocess.run(
-        [SIGNAL_CLI, "-a", phone, "send", "-m", message, recipient],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+def send(phone: str, recipient: str, message: str, attachment: str | None = None) -> tuple[bool, str]:
+    cmd = [SIGNAL_CLI, "-a", phone, "send"]
+    if attachment:
+        cmd.extend(["--attachment", attachment])
+    cmd.extend(["-m", message, recipient])
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     if result.returncode == 0:
         return True, "Sent"
     return False, result.stderr or "Send failed"
